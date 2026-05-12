@@ -36,4 +36,10 @@
     - Implementation of a `deploy.sh` script to pull latest changes and restart the service.
     - Integration with Git push workflow (manual trigger or webhook).
 
-*Next Step: Create deployment scripts and setup instructions.*
+### Script Creation
+- Created `requirements.txt` with essential dependencies.
+- Created `deploy.sh` for automated updates and service restarts.
+- Created `setup_server.sh` for initial server-side environment setup.
+- Created `docs/hlquant.service` systemd unit file template.
+
+*Next Step: Execute setup on the GCP server.*

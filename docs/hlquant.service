@@ -1,0 +1,18 @@
+[Unit]
+Description=HLQuant Delta Neutral Bot
+After=network.target
+
+[Service]
+# 서버의 실제 사용자 계정명으로 변경 필요 (예: yinamsu)
+User=yinamsu
+Group=yinamsu
+WorkingDirectory=/home/yinamsu/HLQuant
+ExecStart=/home/yinamsu/HLQuant/venv/bin/python main.py
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=hlquant
+
+[Install]
+WantedBy=multi-user.target

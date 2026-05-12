@@ -1,0 +1,4 @@
+aiohttp==3.13.3
+aiohttp-threaded-resolver==0.1.0 # If I want to use it, or just aiohttp
+aiodns==4.0.0
+requests==2.32.5
