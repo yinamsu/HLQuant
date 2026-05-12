@@ -52,6 +52,12 @@
 - **Optimization**: Cleaned up `requirements.txt` by removing redundant packages identified during the first deployment.
 - **Security & Backup**: Created a local `.env` file (Git ignored) to securely back up the SSH private key and store Telegram API credentials for future notification integration.
 
+### Refinement & Optimization (Post-Audit)
+- **Dependency Optimization**: Removed `requests` from `requirements.txt` to favor `aiohttp`.
+- **Environment Decoupling**: Moved hardcoded server IP to `.env` as `SERVER_IP`.
+- **Log Management**: Replaced `FileHandler` with `RotatingFileHandler` (10MB per file, 5 backups).
+- **State Audit**: Confirmed all core logic (DNS Resolver, Spot Mapping, Price Fields) is robust.
+
 ### Telegram Notification Integration
 - Created `notifier.py` for asynchronous Telegram messaging.
 - Integrated `TelegramNotifier` into `strategy.py` for Entry/Exit alerts.
