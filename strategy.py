@@ -2,6 +2,7 @@ import logging
 import json
 import os
 from datetime import datetime, timedelta
+from notifier import TelegramNotifier
 
 class DeltaNeutralStrategy:
     """
@@ -15,6 +16,7 @@ class DeltaNeutralStrategy:
         self.entry_apy_threshold = 3.0
         self.exit_apy_threshold = 1.0
         self.rebalance_gap = 10.0  # 타 종목 APY가 10% 이상 높을 때
+        self.notifier = TelegramNotifier()
 
     def _load_state(self):
         if os.path.exists(self.state_file):
@@ -107,6 +109,7 @@ class DeltaNeutralStrategy:
             
             if exit_reason:
                 logging.info(f"[VIRTUAL EXIT] {symbol} | Reason: {exit_reason}")
+                await self.notifier.send_exit_notification(symbol, exit_reason)
                 symbols_to_exit.append(symbol)
 
         # 포지션 제거
@@ -130,5 +133,6 @@ class DeltaNeutralStrategy:
                         'entry_apy': t['apy']
                     }
                     logging.info(f"[VIRTUAL ENTRY] {t['symbol']} | APY: {t['apy']:.2f}% | SpotPx: {virtual_spot_buy_px:.4f} | PerpPx: {virtual_perp_sell_px:.4f}")
+                    await self.notifier.send_entry_notification(t['symbol'], t['apy'], virtual_spot_buy_px, virtual_perp_sell_px)
 
         self._save_state()

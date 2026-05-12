@@ -52,5 +52,11 @@
 - **Optimization**: Cleaned up `requirements.txt` by removing redundant packages identified during the first deployment.
 - **Security & Backup**: Created a local `.env` file (Git ignored) to securely back up the SSH private key and store Telegram API credentials for future notification integration.
 
+### Telegram Notification Integration
+- Created `notifier.py` for asynchronous Telegram messaging.
+- Integrated `TelegramNotifier` into `strategy.py` for Entry/Exit alerts.
+- Added startup notification in `main.py`.
+- Updated `requirements.txt` with `python-dotenv`.
+
 ---
-*Next Step: Long-term monitoring and implementation of Telegram notifications.*
+*Next Step: Deploy the notification update to the server.*

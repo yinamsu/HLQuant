@@ -3,6 +3,7 @@ import logging
 import sys
 from hyperliquid_api import HyperliquidAPI
 from strategy import DeltaNeutralStrategy
+from notifier import TelegramNotifier
 
 # 로깅 설정
 logging.basicConfig(
@@ -19,6 +20,9 @@ async def main():
     
     api = HyperliquidAPI()
     strategy = DeltaNeutralStrategy()
+    notifier = TelegramNotifier()
+    
+    await notifier.send_message("✅ *HLQuant Bot 가동 시작* (Paper Trading Mode)")
     
     try:
         while True:
