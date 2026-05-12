@@ -105,7 +105,7 @@ class TelegramNotifier:
         """텔레그램 메시지를 확인하고 명령어가 있으면 응답"""
         url = f"https://api.telegram.org/bot{self.token}/getUpdates"
         
-        # 처음 실행 시, 현재 시점 이후의 메시지만 가져오도록 설정
+        # 처음 실행 시, 마지막 메시지 ID를 확인하되 무조건 버리지 않음
         if self.last_update_id == 0:
             params = {"offset": -1}
             try:
@@ -114,17 +114,20 @@ class TelegramNotifier:
                         if response.status == 200:
                             data = await response.json()
                             if data.get("result"):
-                                # 가장 최근 메시지 ID + 1로 설정하여 그 이후 메시지만 받음
-                                self.last_update_id = data["result"][0]["update_id"]
-                                logging.info(f"Telegram listener initialized. Starting from ID: {self.last_update_id}")
+                                # 마지막 메시지 ID 저장 (다음 루프부터는 +1된 위치부터 가져옴)
+                                update = data["result"][0]
+                                self.last_update_id = update["update_id"]
+                                logging.info(f"Telegram listener initialized at ID: {self.last_update_id}")
+                                
+                                # 초기화 시 받은 이 메시지도 명령어로 처리할 수 있도록 함
+                                await self._process_update(update)
                             else:
-                                # 메시지가 하나도 없는 경우 (새 봇)
                                 self.last_update_id = 1
             except Exception as e:
                 logging.error(f"Error initializing Telegram listener: {e}")
             return
 
-        params = {"offset": self.last_update_id + 1, "timeout": 1} # 롱 폴링 흉내
+        params = {"offset": self.last_update_id + 1, "timeout": 1}
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -133,23 +136,30 @@ class TelegramNotifier:
                         data = await response.json()
                         for update in data.get("result", []):
                             self.last_update_id = update["update_id"]
-                            msg = update.get("message", {})
-                            text = msg.get("text", "").strip()
-                            chat_id = msg.get("chat", {}).get("id")
-                            
-                            # 보낸 사람이 나인지 확인 (보안)
-                            if str(chat_id) != str(self.chat_id):
-                                logging.warning(f"Unauthorized access attempt from chat_id: {chat_id}")
-                                continue
-
-                            logging.info(f"Command received: {text}")
-
-                            if text == "/server":
-                                stats = await self.get_system_stats()
-                                await self.send_message(stats)
-                            elif text == "/help":
-                                await self.send_message("사용 가능한 명령어:\n/server - 서버 상태 확인")
-                            elif text == "/start":
-                                await self.send_message("HLQuant 봇이 준비되었습니다. /server 명령어를 입력해보세요.")
+                            await self._process_update(update)
         except Exception as e:
             logging.error(f"Error checking Telegram commands: {e}")
+
+    async def _process_update(self, update):
+        """개별 업데이트 메시지 처리 로직"""
+        msg = update.get("message", {})
+        text = msg.get("text", "").strip()
+        chat_id = msg.get("chat", {}).get("id")
+        
+        if not text or chat_id is None:
+            return
+
+        # 보낸 사람이 나인지 확인 (보안)
+        if str(chat_id) != str(self.chat_id):
+            logging.warning(f"Unauthorized access attempt: Expected {self.chat_id}, Got {chat_id}")
+            return
+
+        logging.info(f"Command received: {text}")
+
+        if text == "/server":
+            stats = await self.get_system_stats()
+            await self.send_message(stats)
+        elif text == "/help":
+            await self.send_message("사용 가능한 명령어:\n/server - 서버 상태 확인")
+        elif text == "/start":
+            await self.send_message("HLQuant 봇이 준비되었습니다. /server 명령어를 입력해보세요.")
