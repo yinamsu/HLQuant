@@ -42,4 +42,9 @@
 - Created `setup_server.sh` for initial server-side environment setup.
 - Created `docs/hlquant.service` systemd unit file template.
 
-*Next Step: Execute setup on the GCP server.*
+### Automation & CI/CD
+- Planned GitHub Actions workflow for automatic deployment.
+- Required secrets: `REMOTE_HOST`, `REMOTE_USER`, `SSH_PRIVATE_KEY`.
+- Created `.github/workflows/deploy.yml` to trigger `./deploy.sh` on push.
+
+*Next Step: Configure GitHub Secrets and push the YAML file.*
