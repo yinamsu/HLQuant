@@ -22,7 +22,7 @@ async def telegram_worker(notifier):
     while True:
         try:
             await notifier.check_commands()
-            await asyncio.sleep(1) # 1초마다 확인
+            await asyncio.sleep(0.1) # 롱 폴링이므로 아주 짧게 쉬어도 됨
         except Exception as e:
             logging.error(f"Telegram worker error: {e}")
             await asyncio.sleep(5)

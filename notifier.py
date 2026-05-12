@@ -127,11 +127,12 @@ class TelegramNotifier:
                 logging.error(f"Error initializing Telegram listener: {e}")
             return
 
-        params = {"offset": self.last_update_id + 1, "timeout": 1}
-        
+        params = {"offset": self.last_update_id + 1, "timeout": 30} # 롱 폴링 (메시지 올 때까지 대기)
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params) as response:
+
                     if response.status == 200:
                         data = await response.json()
                         for update in data.get("result", []):
