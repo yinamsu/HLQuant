@@ -102,6 +102,22 @@ class TelegramNotifier:
     async def check_commands(self):
         """텔레그램 메시지를 확인하고 명령어가 있으면 응답"""
         url = f"https://api.telegram.org/bot{self.token}/getUpdates"
+        
+        # 처음 실행 시, 큐에 쌓인 과거 메시지들을 모두 읽음 처리 (Skip)
+        if self.last_update_id == 0:
+            params = {"offset": -1, "limit": 1}
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, params=params) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            if data.get("result"):
+                                self.last_update_id = data["result"][0]["update_id"]
+                                logging.info(f"Initial Telegram offset set to {self.last_update_id}")
+            except Exception as e:
+                logging.error(f"Error setting initial Telegram offset: {e}")
+            return
+
         params = {"offset": self.last_update_id + 1, "timeout": 0}
         
         try:
