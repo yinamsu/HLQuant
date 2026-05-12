@@ -25,4 +25,15 @@
 - Verified state persistence in `paper_balance.json`.
 
 ---
-*Next Step: Long-term monitoring and potential UI/Dashboard implementation.*
+## 2026-05-12 (Continued)
+### Deployment Planning (GCP Server)
+- Target Server: Existing GCP instance (`34.136.45.224`).
+- Isolation Strategy:
+    - Dedicated directory: `~/HLQuant`
+    - Dedicated Virtual Environment: `~/HLQuant/venv`
+    - Dedicated Systemd Service: `hlquant.service`
+- Deployment Automation:
+    - Implementation of a `deploy.sh` script to pull latest changes and restart the service.
+    - Integration with Git push workflow (manual trigger or webhook).
+
+*Next Step: Create deployment scripts and setup instructions.*
