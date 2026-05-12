@@ -17,6 +17,16 @@ logging.basicConfig(
     ]
 )
 
+async def telegram_worker(notifier):
+    """텔레그램 명령어를 독립적으로 처리하는 백그라운드 태스크"""
+    while True:
+        try:
+            await notifier.check_commands()
+            await asyncio.sleep(1) # 1초마다 확인
+        except Exception as e:
+            logging.error(f"Telegram worker error: {e}")
+            await asyncio.sleep(5)
+
 async def main():
     logging.info("=== Hyperliquid Delta Neutral Paper Trading Bot Started ===")
     
@@ -26,6 +36,9 @@ async def main():
     
     await notifier.set_commands()
     await notifier.send_message("✅ *HLQuant Bot 가동 시작* (Paper Trading Mode)")
+    
+    # 텔레그램 리스너를 백그라운드 태스크로 시작
+    asyncio.create_task(telegram_worker(notifier))
     
     try:
         while True:
@@ -47,10 +60,9 @@ async def main():
             else:
                 logging.warning("데이터를 가져오는 데 실패했습니다. 다음 루프에서 재시도합니다.")
             
-            # 3. 1분 대기 중 1초마다 텔레그램 명령어 확인 (실시간 응답성 개선)
-            for _ in range(60): # 60 * 1초 = 60초
-                await notifier.check_commands()
-                await asyncio.sleep(1)
+            # 3. 시장 스캔 주기 (1분) 동안 대기
+            # 이제 텔레그램은 백그라운드에서 돌고 있으므로 그냥 sleep하면 됨
+            await asyncio.sleep(60)
             
     except asyncio.CancelledError:
         logging.info("봇 종료 요청을 받았습니다.")
