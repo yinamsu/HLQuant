@@ -48,6 +48,7 @@
 - Created `.github/workflows/deploy.yml` to trigger `./deploy.sh` on push.
 - **SSH Key Registration**: Generated a new key pair and registered the public key on the server and the private key on GitHub.
 - **Test Deployment**: Triggered a test deployment to verify the full pipeline.
+- **Success**: Verified that GitHub Actions successfully connects to the GCP server and executes `./deploy.sh`.
+- **Optimization**: Cleaned up `requirements.txt` by removing redundant packages identified during the first deployment.
 
----
-*Next Step: Monitor live performance and finalize production settings.*
+*Next Step: Long-term monitoring and further feature development.*
