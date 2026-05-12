@@ -131,17 +131,22 @@ class TelegramNotifier:
                         for update in data.get("result", []):
                             self.last_update_id = update["update_id"]
                             msg = update.get("message", {})
-                            text = msg.get("text", "")
+                            text = msg.get("text", "").strip()
                             chat_id = msg.get("chat", {}).get("id")
                             
                             # 보낸 사람이 나인지 확인 (보안)
                             if str(chat_id) != str(self.chat_id):
-                                return
+                                logging.warning(f"Unauthorized access attempt from chat_id: {chat_id}")
+                                continue
+
+                            logging.info(f"Command received: {text}")
 
                             if text == "/server":
                                 stats = await self.get_system_stats()
                                 await self.send_message(stats)
                             elif text == "/help":
                                 await self.send_message("사용 가능한 명령어:\n/server - 서버 상태 확인")
+                            elif text == "/start":
+                                await self.send_message("HLQuant 봇이 준비되었습니다. /server 명령어를 입력해보세요.")
         except Exception as e:
             logging.error(f"Error checking Telegram commands: {e}")
