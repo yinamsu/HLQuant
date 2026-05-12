@@ -56,7 +56,10 @@
 - Created `notifier.py` for asynchronous Telegram messaging.
 - Integrated `TelegramNotifier` into `strategy.py` for Entry/Exit alerts.
 - Added startup notification in `main.py`.
-- Updated `requirements.txt` with `python-dotenv`.
+- **Interactive Command Implementation**:
+    - Added `/server` command to view CPU, RAM, and Disk status.
+    - Implemented a command listener loop in `main.py` (checks every 5 seconds).
+    - Updated `requirements.txt` with `psutil`.
 
 ---
-*Next Step: Deploy the notification update to the server.*
+*Next Step: Long-term monitoring and further command implementation.*

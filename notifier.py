@@ -1,6 +1,9 @@
 import aiohttp
 import logging
 import os
+import psutil
+import socket
+from datetime import datetime
 from dotenv import load_dotenv
 
 # .env 파일 로드 (시스템 환경 변수가 있더라도 .env 내용을 우선 적용)
@@ -17,6 +20,7 @@ class TelegramNotifier:
         if not self.token: return
         
         commands = [
+            {"command": "server", "description": "서버 하드웨어 상태 확인"},
             {"command": "status", "description": "현재 봇 상태 및 시장 요약"},
             {"command": "balance", "description": "가상 장부 수익률 확인"},
             {"command": "positions", "description": "현재 보유 포지션 확인"},
@@ -70,3 +74,54 @@ class TelegramNotifier:
             f"• *Reason*: {reason}\n"
         )
         await self.send_message(text)
+
+    async def get_system_stats(self):
+        """서버 리소스 상태를 텍스트로 반환"""
+        cpu_usage = psutil.cpu_percent(interval=1)
+        ram = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        hostname = socket.gethostname()
+        ip_addr = socket.gethostbyname(hostname)
+        
+        text = (
+            f"🚀 *[HLQuant Server Stats]*\n\n"
+            f"🌐 *Network & Info*\n"
+            f"• Host: {hostname}\n"
+            f"• IP: {ip_addr}\n\n"
+            f"💻 *Hardware Stats*\n"
+            f"• CPU Usage: {cpu_usage}% {'🟢' if cpu_usage < 70 else '🔴'}\n"
+            f"• RAM Usage: {ram.percent}% ({ram.used/1024**3:.1f}G/{ram.total/1024**3:.1f}G)\n"
+            f"• DISK Usage: {disk.percent}% ({disk.used/1024**3:.1f}G/{disk.total/1024**3:.1f}G)\n\n"
+            f"🤖 *Bot Status*: Running\n"
+            f"⏰ *Server Time*: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        return text
+
+    async def check_commands(self):
+        """텔레그램 메시지를 확인하고 명령어가 있으면 응답"""
+        url = f"https://api.telegram.org/bot{self.token}/getUpdates"
+        params = {"offset": -1, "limit": 1} # 최신 메시지 1개만 확인
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data["result"]:
+                            update = data["result"][0]
+                            msg = update.get("message", {})
+                            text = msg.get("text", "")
+                            chat_id = msg.get("chat", {}).get("id")
+                            
+                            # 보낸 사람이 나인지 확인 (보안)
+                            if str(chat_id) != str(self.chat_id):
+                                return
+
+                            if text == "/server":
+                                stats = await self.get_system_stats()
+                                await self.send_message(stats)
+                            elif text == "/help":
+                                await self.send_message("사용 가능한 명령어:\n/server - 서버 상태 확인")
+        except Exception as e:
+            logging.error(f"Error checking Telegram commands: {e}")

@@ -45,10 +45,10 @@ async def main():
             else:
                 logging.warning("데이터를 가져오는 데 실패했습니다. 다음 루프에서 재시도합니다.")
             
-            # 3. API 부하 방지 및 루프 간격 (예: 1분)
-            # 하이퍼리퀴드 펀딩비는 1시간 단위로 바뀌므로 너무 자주 조회할 필요는 없지만,
-            # 가격 변동(Premium) 체크를 위해 1분 단위로 설정
-            await asyncio.sleep(60)
+            # 3. 1분 대기 중 5초마다 텔레그램 명령어 확인
+            for _ in range(12): # 12 * 5초 = 60초
+                await notifier.check_commands()
+                await asyncio.sleep(5)
             
     except asyncio.CancelledError:
         logging.info("봇 종료 요청을 받았습니다.")
