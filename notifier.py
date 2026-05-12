@@ -80,6 +80,7 @@ class TelegramNotifier:
         """서버 리소스 상태를 텍스트로 반환"""
         cpu_usage = psutil.cpu_percent(interval=1)
         ram = psutil.virtual_memory()
+        swap = psutil.swap_memory()
         disk = psutil.disk_usage('/')
         
         hostname = socket.gethostname()
@@ -93,6 +94,7 @@ class TelegramNotifier:
             f"💻 *Hardware Stats*\n"
             f"• CPU Usage: {cpu_usage}% {'🟢' if cpu_usage < 70 else '🔴'}\n"
             f"• RAM Usage: {ram.percent}% ({ram.used/1024**3:.1f}G/{ram.total/1024**3:.1f}G)\n"
+            f"• SWAP Usage: {swap.percent}% ({swap.used/1024**3:.1f}G/{swap.total/1024**3:.1f}G)\n"
             f"• DISK Usage: {disk.percent}% ({disk.used/1024**3:.1f}G/{disk.total/1024**3:.1f}G)\n\n"
             f"🤖 *Bot Version*: V1.0.0 [HLQuant]\n"
             f"⏰ *Server Time*: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
