@@ -3,8 +3,8 @@ import logging
 import os
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# .env 파일 로드 (시스템 환경 변수가 있더라도 .env 내용을 우선 적용)
+load_dotenv(override=True)
 
 class TelegramNotifier:
     def __init__(self):
