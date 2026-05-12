@@ -15,6 +15,7 @@ class TelegramNotifier:
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
         self.base_url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         self.cmd_url = f"https://api.telegram.org/bot{self.token}/setMyCommands"
+        self.last_update_id = 0
 
     async def set_commands(self):
         if not self.token: return
@@ -85,15 +86,15 @@ class TelegramNotifier:
         ip_addr = socket.gethostbyname(hostname)
         
         text = (
-            f"🚀 *[HLQuant Server Stats]*\n\n"
+            f"🚀 *[Alpha Professional Dashboard - HLQ]*\n\n"
             f"🌐 *Network & Info*\n"
-            f"• Host: {hostname}\n"
-            f"• IP: {ip_addr}\n\n"
+            f"• External IP: 34.136.45.224\n"
+            f"• Host: {hostname}\n\n"
             f"💻 *Hardware Stats*\n"
             f"• CPU Usage: {cpu_usage}% {'🟢' if cpu_usage < 70 else '🔴'}\n"
             f"• RAM Usage: {ram.percent}% ({ram.used/1024**3:.1f}G/{ram.total/1024**3:.1f}G)\n"
             f"• DISK Usage: {disk.percent}% ({disk.used/1024**3:.1f}G/{disk.total/1024**3:.1f}G)\n\n"
-            f"🤖 *Bot Status*: Running\n"
+            f"🤖 *Bot Version*: V1.0.0 [HLQuant]\n"
             f"⏰ *Server Time*: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
         return text
@@ -101,15 +102,15 @@ class TelegramNotifier:
     async def check_commands(self):
         """텔레그램 메시지를 확인하고 명령어가 있으면 응답"""
         url = f"https://api.telegram.org/bot{self.token}/getUpdates"
-        params = {"offset": -1, "limit": 1} # 최신 메시지 1개만 확인
+        params = {"offset": self.last_update_id + 1, "timeout": 0}
         
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if data["result"]:
-                            update = data["result"][0]
+                        for update in data.get("result", []):
+                            self.last_update_id = update["update_id"]
                             msg = update.get("message", {})
                             text = msg.get("text", "")
                             chat_id = msg.get("chat", {}).get("id")
