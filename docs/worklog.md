@@ -50,5 +50,7 @@
 - **Test Deployment**: Triggered a test deployment to verify the full pipeline.
 - **Success**: Verified that GitHub Actions successfully connects to the GCP server and executes `./deploy.sh`.
 - **Optimization**: Cleaned up `requirements.txt` by removing redundant packages identified during the first deployment.
+- **Security & Backup**: Created a local `.env` file (Git ignored) to securely back up the SSH private key and store Telegram API credentials for future notification integration.
 
-*Next Step: Long-term monitoring and further feature development.*
+---
+*Next Step: Long-term monitoring and implementation of Telegram notifications.*
