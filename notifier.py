@@ -84,7 +84,6 @@ class TelegramNotifier:
         disk = psutil.disk_usage('/')
         
         hostname = socket.gethostname()
-        ip_addr = socket.gethostbyname(hostname)
         
         external_ip = os.getenv("SERVER_IP", "Unknown")
         text = (
