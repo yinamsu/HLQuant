@@ -22,6 +22,7 @@ async def main():
     strategy = DeltaNeutralStrategy()
     notifier = TelegramNotifier()
     
+    await notifier.set_commands()
     await notifier.send_message("✅ *HLQuant Bot 가동 시작* (Paper Trading Mode)")
     
     try:
