@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import logging.handlers
 import sys
+
 from hyperliquid_api import HyperliquidAPI
 from strategy import DeltaNeutralStrategy
 from notifier import TelegramNotifier
@@ -11,7 +13,7 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("bot.log")
+        logging.handlers.RotatingFileHandler("bot.log", maxBytes=10*1024*1024, backupCount=5)
     ]
 )
 

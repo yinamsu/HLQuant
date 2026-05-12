@@ -86,10 +86,11 @@ class TelegramNotifier:
         hostname = socket.gethostname()
         ip_addr = socket.gethostbyname(hostname)
         
+        external_ip = os.getenv("SERVER_IP", "Unknown")
         text = (
             f"🚀 *[Alpha Professional Dashboard - HLQ]*\n\n"
             f"🌐 *Network & Info*\n"
-            f"• External IP: 34.136.45.224\n"
+            f"• External IP: {external_ip}\n"
             f"• Host: {hostname}\n\n"
             f"💻 *Hardware Stats*\n"
             f"• CPU Usage: {cpu_usage}% {'🟢' if cpu_usage < 70 else '🔴'}\n"
