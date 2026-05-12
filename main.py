@@ -1,0 +1,60 @@
+import asyncio
+import logging
+import sys
+from hyperliquid_api import HyperliquidAPI
+from strategy import DeltaNeutralStrategy
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("bot.log")
+    ]
+)
+
+async def main():
+    logging.info("=== Hyperliquid Delta Neutral Paper Trading Bot Started ===")
+    
+    api = HyperliquidAPI()
+    strategy = DeltaNeutralStrategy()
+    
+    try:
+        while True:
+            logging.info("시장 스캔 중...")
+            
+            # 1. 시장 데이터 가져오기
+            perp_data = await api.get_all_perp_data()
+            spot_data = await api.get_all_spot_data()
+            
+            if perp_data and spot_data is not None:
+                # 2. 전략 로직 실행
+                await strategy.execute_logic(perp_data, spot_data)
+                
+                # 현재 상태 출력 (옵션)
+                pos_count = len(strategy.positions)
+                logging.info(f"현재 보유 포지션 수: {pos_count}/3")
+                for sym, details in strategy.positions.items():
+                    logging.info(f" -> {sym}: 진입일시={details['entry_time']}, 진입APY={details['entry_apy']:.2f}%")
+            else:
+                logging.warning("데이터를 가져오는 데 실패했습니다. 다음 루프에서 재시도합니다.")
+            
+            # 3. API 부하 방지 및 루프 간격 (예: 1분)
+            # 하이퍼리퀴드 펀딩비는 1시간 단위로 바뀌므로 너무 자주 조회할 필요는 없지만,
+            # 가격 변동(Premium) 체크를 위해 1분 단위로 설정
+            await asyncio.sleep(60)
+            
+    except asyncio.CancelledError:
+        logging.info("봇 종료 요청을 받았습니다.")
+    except Exception as e:
+        logging.error(f"예기치 못한 오류 발생: {e}", exc_info=True)
+    finally:
+        await api.close()
+        logging.info("=== Bot Safely Stopped ===")
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
