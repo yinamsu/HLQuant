@@ -18,6 +18,51 @@ class DeltaNeutralStrategy:
         self.rebalance_gap = 10.0  # 타 종목 APY가 10% 이상 높을 때
         self.notifier = TelegramNotifier()
 
+    def get_status_summary(self):
+        """현재 시장 상태 및 상위 APY 요약 (메모리상의 최근 데이터 기준)"""
+        # 이 메서드는 perp_data와 spot_data가 로컬 변수로만 존재하므로, 
+        # 마지막으로 확인된 상위 리스트를 저장해두거나 직접 정보를 생성해야 함.
+        # 여기서는 현재 포지션 개수와 간단한 안내를 반환하도록 설계.
+        pos_count = len(self.positions)
+        text = (
+            "📊 *HLQuant 시장 요약*\n\n"
+            f"• 가동 모드: Paper Trading\n"
+            f"• 보유 포지션: {pos_count}/3\n"
+            "• 현재 시장의 상세 상위 리스트는 bot.log를 참조하거나 다음 스캔 결과를 기다려주세요."
+        )
+        return text
+
+    def get_positions_summary(self):
+        """보유 중인 포지션의 상세 내역 요약"""
+        if not self.positions:
+            return "📭 현재 보유 중인 가상 포지션이 없습니다."
+        
+        text = "📝 *현재 가상 포지션 내역*\n\n"
+        for sym, pos in self.positions.items():
+            entry_time = datetime.fromisoformat(pos['entry_time']).strftime('%m/%d %H:%M')
+            text += (
+                f"• *{sym}*\n"
+                f"  - 진입: {entry_time}\n"
+                f"  - 진입APY: {pos['entry_apy']:.2f}%\n"
+                f"  - Spot진입가: {pos['spot_px']:.4f}\n"
+                f"  - Perp진입가: {pos['perp_px']:.4f}\n\n"
+            )
+        return text
+
+    def get_balance_summary(self):
+        """가상 장부의 수익률 현황 요약"""
+        if not self.positions:
+            return "💰 현재 운용 중인 자산이 없습니다."
+        
+        # 실제 현재가를 반영하려면 perp_data가 필요하지만, 
+        # 여기서는 진입가 정보와 가동 시간 위주로 보고.
+        text = "💰 *가상 장부 수익률 보고*\n\n"
+        for sym, pos in self.positions.items():
+            text += f"• {sym}: 진입 APY {pos['entry_apy']:.2f}%\n"
+        
+        text += "\n*참고*: 현재 수익률은 펀딩비 적립 주기에 따라 계산되며, 상세 미실현 손익은 다음 버전에서 지원될 예정입니다."
+        return text
+
     def _load_state(self):
         if os.path.exists(self.state_file):
             try:

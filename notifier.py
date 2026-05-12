@@ -10,12 +10,13 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 class TelegramNotifier:
-    def __init__(self):
+    def __init__(self, strategy=None):
         self.token = os.getenv("TELEGRAM_TOKEN")
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
         self.base_url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         self.cmd_url = f"https://api.telegram.org/bot{self.token}/setMyCommands"
         self.last_update_id = 0
+        self.strategy = strategy
 
     async def set_commands(self):
         if not self.token: return
@@ -64,7 +65,6 @@ class TelegramNotifier:
             f"• *APY*: {apy:.2f}%\n"
             f"• *Spot Buy*: {spot_px:.4f}\n"
             f"• *Perp Sell*: {perp_px:.4f}\n"
-            f"• *Time*: {logging.Formatter('%(asctime)s').format(logging.LogRecord('', 0, '', 0, '', None, None))}"
         )
         await self.send_message(text)
 
@@ -114,12 +114,9 @@ class TelegramNotifier:
                         if response.status == 200:
                             data = await response.json()
                             if data.get("result"):
-                                # 마지막 메시지 ID 저장 (다음 루프부터는 +1된 위치부터 가져옴)
+                                # 마지막 메시지 ID 저장
                                 update = data["result"][0]
                                 self.last_update_id = update["update_id"]
-                                logging.info(f"Telegram listener initialized at ID: {self.last_update_id}")
-                                
-                                # 초기화 시 받은 이 메시지도 명령어로 처리할 수 있도록 함
                                 await self._process_update(update)
                             else:
                                 self.last_update_id = 1
@@ -127,12 +124,11 @@ class TelegramNotifier:
                 logging.error(f"Error initializing Telegram listener: {e}")
             return
 
-        params = {"offset": self.last_update_id + 1, "timeout": 30} # 롱 폴링 (메시지 올 때까지 대기)
-
+        params = {"offset": self.last_update_id + 1, "timeout": 30}
+        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params) as response:
-
                     if response.status == 200:
                         data = await response.json()
                         for update in data.get("result", []):
@@ -160,7 +156,33 @@ class TelegramNotifier:
         if text == "/server":
             stats = await self.get_system_stats()
             await self.send_message(stats)
+        elif text == "/status":
+            if self.strategy:
+                status_text = self.strategy.get_status_summary()
+                await self.send_message(status_text)
+            else:
+                await self.send_message("⚠️ 전략 모듈이 연결되지 않았습니다.")
+        elif text == "/positions":
+            if self.strategy:
+                pos_text = self.strategy.get_positions_summary()
+                await self.send_message(pos_text)
+            else:
+                await self.send_message("⚠️ 전략 모듈이 연결되지 않았습니다.")
+        elif text == "/balance":
+            if self.strategy:
+                balance_text = self.strategy.get_balance_summary()
+                await self.send_message(balance_text)
+            else:
+                await self.send_message("⚠️ 전략 모듈이 연결되지 않았습니다.")
         elif text == "/help":
-            await self.send_message("사용 가능한 명령어:\n/server - 서버 상태 확인")
+            help_text = (
+                "🤖 *HLQuant 명령어 도움말*\n\n"
+                "• /server - 서버 하드웨어 상태 확인\n"
+                "• /status - 시장 요약 및 상위 APY 확인\n"
+                "• /positions - 현재 보유 포지션 상세\n"
+                "• /balance - 가상 장부 수익률 확인\n"
+                "• /help - 도움말 출력"
+            )
+            await self.send_message(help_text)
         elif text == "/start":
-            await self.send_message("HLQuant 봇이 준비되었습니다. /server 명령어를 입력해보세요.")
+            await self.send_message("HLQuant 봇이 준비되었습니다. /help 명령어를 입력해보세요.")
