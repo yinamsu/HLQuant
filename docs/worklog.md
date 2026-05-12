@@ -46,5 +46,8 @@
 - Planned GitHub Actions workflow for automatic deployment.
 - Required secrets: `REMOTE_HOST`, `REMOTE_USER`, `SSH_PRIVATE_KEY`.
 - Created `.github/workflows/deploy.yml` to trigger `./deploy.sh` on push.
+- **SSH Key Registration**: Generated a new key pair and registered the public key on the server and the private key on GitHub.
+- **Test Deployment**: Triggered a test deployment to verify the full pipeline.
 
-*Next Step: Configure GitHub Secrets and push the YAML file.*
+---
+*Next Step: Monitor live performance and finalize production settings.*

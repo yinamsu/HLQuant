@@ -7,6 +7,7 @@ HLQuant project for advanced trading and quantitative analysis.
 - Git account: yinamsu
 
 ## Features
-- [ ] Nitro Trading Engine Integration
-- [ ] Multi-exchange Support
-- [ ] Advanced Backtesting Lab
+- [x] Nitro Trading Engine Integration
+- [x] Multi-exchange Support
+- [x] Advanced Backtesting Lab
+- [x] **Auto Deployment (GitHub Actions) Enabled**
