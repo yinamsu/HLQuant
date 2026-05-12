@@ -47,10 +47,10 @@ async def main():
             else:
                 logging.warning("데이터를 가져오는 데 실패했습니다. 다음 루프에서 재시도합니다.")
             
-            # 3. 1분 대기 중 5초마다 텔레그램 명령어 확인
-            for _ in range(12): # 12 * 5초 = 60초
+            # 3. 1분 대기 중 1초마다 텔레그램 명령어 확인 (실시간 응답성 개선)
+            for _ in range(60): # 60 * 1초 = 60초
                 await notifier.check_commands()
-                await asyncio.sleep(5)
+                await asyncio.sleep(1)
             
     except asyncio.CancelledError:
         logging.info("봇 종료 요청을 받았습니다.")

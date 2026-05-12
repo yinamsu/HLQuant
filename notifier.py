@@ -105,22 +105,26 @@ class TelegramNotifier:
         """텔레그램 메시지를 확인하고 명령어가 있으면 응답"""
         url = f"https://api.telegram.org/bot{self.token}/getUpdates"
         
-        # 처음 실행 시, 큐에 쌓인 과거 메시지들을 모두 읽음 처리 (Skip)
+        # 처음 실행 시, 현재 시점 이후의 메시지만 가져오도록 설정
         if self.last_update_id == 0:
-            params = {"offset": -1, "limit": 1}
+            params = {"offset": -1}
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url, params=params) as response:
                         if response.status == 200:
                             data = await response.json()
                             if data.get("result"):
+                                # 가장 최근 메시지 ID + 1로 설정하여 그 이후 메시지만 받음
                                 self.last_update_id = data["result"][0]["update_id"]
-                                logging.info(f"Initial Telegram offset set to {self.last_update_id}")
+                                logging.info(f"Telegram listener initialized. Starting from ID: {self.last_update_id}")
+                            else:
+                                # 메시지가 하나도 없는 경우 (새 봇)
+                                self.last_update_id = 1
             except Exception as e:
-                logging.error(f"Error setting initial Telegram offset: {e}")
+                logging.error(f"Error initializing Telegram listener: {e}")
             return
 
-        params = {"offset": self.last_update_id + 1, "timeout": 0}
+        params = {"offset": self.last_update_id + 1, "timeout": 1} # 롱 폴링 흉내
         
         try:
             async with aiohttp.ClientSession() as session:
