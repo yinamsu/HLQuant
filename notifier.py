@@ -3,6 +3,7 @@ import logging
 import os
 import psutil
 import socket
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -105,19 +106,24 @@ class TelegramNotifier:
         """텔레그램 메시지를 확인하고 명령어가 있으면 응답"""
         url = f"https://api.telegram.org/bot{self.token}/getUpdates"
         
-        # 처음 실행 시, 마지막 메시지 ID를 확인하되 무조건 버리지 않음
+        # 처음 실행 시, 최근 메시지들을 확인하여 1분 이내의 것들은 처리
         if self.last_update_id == 0:
-            params = {"offset": -1}
+            params = {"offset": -10, "limit": 10} # 최근 최대 10개 조회
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url, params=params) as response:
                         if response.status == 200:
                             data = await response.json()
-                            if data.get("result"):
-                                # 마지막 메시지 ID 저장
-                                update = data["result"][0]
-                                self.last_update_id = update["update_id"]
-                                await self._process_update(update)
+                            results = data.get("result", [])
+                            if results:
+                                now = time.time()
+                                for update in results:
+                                    self.last_update_id = update["update_id"]
+                                    msg_date = update.get("message", {}).get("date", 0)
+                                    # 60초 이내의 메시지만 처리하여 과거 도배 방지
+                                    if now - msg_date < 60:
+                                        await self._process_update(update)
+                                logging.info(f"Telegram listener initialized. Last processed ID: {self.last_update_id}")
                             else:
                                 self.last_update_id = 1
             except Exception as e:
