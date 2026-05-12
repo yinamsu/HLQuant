@@ -31,8 +31,9 @@ async def main():
     logging.info("=== Hyperliquid Delta Neutral Paper Trading Bot Started ===")
     
     api = HyperliquidAPI()
-    strategy = DeltaNeutralStrategy()
-    notifier = TelegramNotifier(strategy=strategy) # 전략 객체 연결
+    notifier = TelegramNotifier()
+    strategy = DeltaNeutralStrategy(notifier=notifier)
+    notifier.strategy = strategy # 양방향 연결
     
     await notifier.set_commands()
     await notifier.send_message("✅ *HLQuant Bot 가동 시작* (Paper Trading Mode)")

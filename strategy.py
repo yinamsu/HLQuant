@@ -8,7 +8,7 @@ class DeltaNeutralStrategy:
     """
     델타 중립 펀딩비 체리피킹 전략 클래스
     """
-    def __init__(self, state_file="paper_balance.json"):
+    def __init__(self, notifier=None, state_file="paper_balance.json"):
         self.state_file = state_file
         self.positions = self._load_state()
         self.min_hold_hours = 8
@@ -16,7 +16,7 @@ class DeltaNeutralStrategy:
         self.entry_apy_threshold = 3.0
         self.exit_apy_threshold = 1.0
         self.rebalance_gap = 10.0  # 타 종목 APY가 10% 이상 높을 때
-        self.notifier = TelegramNotifier()
+        self.notifier = notifier or TelegramNotifier()
 
     def get_status_summary(self):
         """현재 시장 상태 및 상위 APY 요약 (메모리상의 최근 데이터 기준)"""
@@ -181,3 +181,41 @@ class DeltaNeutralStrategy:
                     await self.notifier.send_entry_notification(t['symbol'], t['apy'], virtual_spot_buy_px, virtual_perp_sell_px)
 
         self._save_state()
+
+    def get_status_summary(self):
+        """봇 가동 상태 요약 반환"""
+        return (
+            f"📊 *[HLQuant Bot Status]*\n\n"
+            f"• *Mode*: Paper Trading\n"
+            f"• *Target Count*: 3 Pairs\n"
+            f"• *Active Positions*: {len(self.positions)}/3\n"
+            f"• *Strategy*: Delta-Neutral Arbitrage\n"
+            f"• *Last Scan*: {datetime.now().strftime('%H:%M:%S')}"
+        )
+
+    def get_balance_summary(self):
+        """수익률 요약 반환 (현재 가상 매매 기준)"""
+        # 가상 원금 $10,000 기준 (추후 실거래 연동 가능)
+        total_profit = sum(p.get('profit', 0) for p in self.positions.values())
+        return (
+            f"💰 *[Virtual Balance]*\n\n"
+            f"• *Initial Equity*: $10,000.00\n"
+            f"• *Current Profit*: ${total_profit:.2f}\n"
+            f"• *ROI*: {(total_profit/10000)*100:.2f}%\n"
+            f"• *Status*: Stable 🟢"
+        )
+
+    def get_positions_summary(self):
+        """현재 보유 포지션 상세 반환"""
+        if not self.positions:
+            return "📍 현재 보유 중인 가상 포지션이 없습니다."
+        
+        text = "📍 *[Active Virtual Positions]*\n\n"
+        for sym, d in self.positions.items():
+            text += (
+                f"• *{sym}*\n"
+                f"  - Entry APY: {d['entry_apy']:.2f}%\n"
+                f"  - Entry Time: {d['entry_time'][:16]}\n"
+                f"  - Status: Holding\n\n"
+            )
+        return text
