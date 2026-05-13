@@ -28,6 +28,7 @@ Hyperliquid 거래소의 델타 중립(Delta Neutral) 차익거래 전략을 자
     - `/status`: 현재 가동 모드(Testnet Real) 및 포지션 현황 요약
     - `/balance`: 총 자산, PnL, ROI 등 수익률 보고
     - `/positions`: 현재 보유 중인 개별 포지션 상세 정보
+    - `/logs`: 봇의 최근 서버 시스템 로그(bot.log) 확인
     - `/server`: 서버 리소스(CPU, RAM, SWAP, DISK) 상태 보고 (Alpha Dashboard 디자인)
     - `/help`: 명령어 도움말 제공
 
