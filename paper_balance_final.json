@@ -1,0 +1,11 @@
+﻿{
+    "positions": {
+        "DYDX": { "entry_time": "2026-05-13T10:48:44", "last_update": "2026-05-13T11:20:00", "spot_px": 0.16188, "perp_px": 0.16188, "entry_apy": 10.95, "profit": 0.0 },
+        "GMT": { "entry_time": "2026-05-13T10:48:44", "last_update": "2026-05-13T11:20:00", "spot_px": 0.01318, "perp_px": 0.01318, "entry_apy": 10.95, "profit": 0.0 },
+        "ATOM": { "entry_time": "2026-05-13T10:48:44", "last_update": "2026-05-13T11:20:00", "spot_px": 2.1337, "perp_px": 2.1337, "entry_apy": 10.95, "profit": 0.0 },
+        "AVAX": { "entry_time": "2026-05-13T10:48:44", "last_update": "2026-05-13T11:20:00", "spot_px": 10.082, "perp_px": 10.082, "entry_apy": 10.95, "profit": 0.0 },
+        "APE": { "entry_time": "2026-05-13T10:48:44", "last_update": "2026-05-13T11:20:00", "spot_px": 0.15742, "perp_px": 0.15742, "entry_apy": 10.95, "profit": 0.0 },
+        "APT": { "entry_time": "2026-05-13T10:48:44", "last_update": "2026-05-13T11:20:00", "spot_px": 1.1042, "perp_px": 1.1042, "entry_apy": 10.95, "profit": 0.0 }
+    },
+    "total_realized_profit": -2.17
+}
