@@ -63,66 +63,50 @@ class HyperliquidAPI:
     async def get_all_spot_data(self):
         """
         모든 현물(Spot) 자산의 데이터를 가져옵니다. 
-        선물 기호와 토큰의 이름/풀네임을 기반으로 현물 자산을 정밀하게 매칭합니다.
+        @1, @2 등의 Alias를 실제 토큰 기호(BTC, ETH, HYPE 등)와 1:1로 매핑하여 반환합니다.
+        메인넷의 'UBTC', 'UETH' 등 Unit 자산들도 표준 기호로 정규화하여 매핑합니다.
         """
         try:
-            # 1. 현물 메타데이터 및 가격 가져오기
+            # 1. 현물 메타데이터 및 시세 데이터 가져오기
             result = self.info.spot_meta_and_asset_ctxs()
             if not result: return None
             
             meta, asset_ctxs = result
             tokens = meta['tokens']
             universe = meta['universe']
-            token_map = {t['index']: t for t in tokens}
             
-            # 2. 선물 유니버스 가져오기 (매칭 대상)
-            perp_meta, _ = self.info.meta_and_asset_ctxs()
-            perp_universe = perp_meta['universe']
+            # 2. 토큰 인덱스 -> 이름 매핑 사전 생성 (정규화 포함)
+            token_map = {}
+            for t in tokens:
+                name = t['name']
+                # 정규화: UBTC -> BTC, UETH -> ETH, USOL -> SOL 등 (Unit 자산 대응)
+                normalized_name = name
+                if name.startswith('U') and len(name) > 1 and name[1:] in ['BTC', 'ETH', 'SOL', 'AVAX', 'MATIC', 'DOT', 'ARB', 'OP']:
+                    normalized_name = name[1:]
+                
+                token_map[t['index']] = normalized_name
             
             spot_data = {}
             
-            # 3. 정밀 매칭 로직
-            for p_asset in perp_universe:
-                p_name = p_asset['name']
-                best_univ_idx = -1
+            # 3. 유니버스(페어)를 순회하며 실제 이름과 매핑
+            for i, pair in enumerate(universe):
+                token_indices = pair.get('tokens', [])
+                if not token_indices: continue
                 
-                for j, u in enumerate(universe):
-                    token_indices = u.get('tokens', [])
-                    if len(token_indices) < 2: continue
-                    
-                    base_token = token_map.get(token_indices[0], {})
-                    quote_token = token_map.get(token_indices[1], {})
-                    
-                    # 오직 USDC 페어만 고려 (차익거래 안정성)
-                    if quote_token.get('name') != 'USDC': continue
-                    
-                    t_name = base_token.get('name', '')
-                    f_name = base_token.get('fullName') or ''
-                    
-                    # 매칭 조건: 정확한 이름, 유닛 기호(U+Name), 또는 풀네임 포함
-                    match = False
-                    if t_name == p_name: match = True
-                    elif t_name == f"U{p_name}": match = True
-                    elif p_name == "BTC" and "Bitcoin" in f_name: match = True
-                    elif p_name == "ETH" and "Ethereum" in f_name: match = True
-                    elif p_name == "SOL" and "Solana" in f_name: match = True
-                    elif p_name == "AVAX" and (t_name == "AVAX0" or "Avalanche" in f_name): match = True
-                    
-                    if match:
-                        best_univ_idx = j
-                        break
+                base_token_idx = token_indices[0]
+                symbol = token_map.get(base_token_idx)
                 
-                if best_univ_idx != -1:
-                    u_asset = universe[best_univ_idx]
-                    ctx = asset_ctxs[best_univ_idx]
-                    spot_data[p_name] = {
+                if symbol:
+                    ctx = asset_ctxs[i]
+                    spot_data[symbol] = {
                         'midPrice': float(ctx.get('midPx') or 0),
-                        'spot_name': u_asset['name']
+                        'spot_name': pair['name'],  # 실제 주문에 사용할 이름 (예: '@107' 또는 'PURR/USDC')
+                        'universe_index': i
                     }
                     
             return spot_data
         except Exception as e:
-            logging.error(f"Error fetching spot data with precise mapping: {e}")
+            logging.error(f"Error fetching universal spot mapping: {e}")
             return None
 
     async def get_balance(self):
