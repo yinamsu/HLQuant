@@ -268,9 +268,10 @@ class DeltaNeutralStrategy:
 
     def get_status_summary(self):
         """봇 가동 상태 요약 반환"""
+        mode_text = "Testnet Real Trading" if self.is_real_trading else "Paper Trading"
         return (
             f"📊 *[HLQuant Bot Status]*\n\n"
-            f"• *Mode*: Paper Trading\n"
+            f"• *Mode*: {mode_text}\n"
             f"• *Target Count*: 3 Pairs\n"
             f"• *Active Positions*: {len(self.positions)}/3\n"
             f"• *Strategy*: Delta-Neutral Arbitrage\n"
