@@ -62,35 +62,67 @@ class HyperliquidAPI:
 
     async def get_all_spot_data(self):
         """
-        모든 현물(Spot) 자산의 데이터를 가져옵니다.
+        모든 현물(Spot) 자산의 데이터를 가져옵니다. 
+        선물 기호와 가격을 기준으로 현물 자산을 매칭하는 로직을 포함합니다.
         """
         try:
+            # 1. 현물 메타데이터 및 가격 가져오기
             result = self.info.spot_meta_and_asset_ctxs()
             if not result: return None
             
             meta, asset_ctxs = result
             tokens = meta['tokens']
             universe = meta['universe']
+            token_map = {t['index']: t for t in tokens}
+            
+            # 2. 선물 데이터 가져오기 (매칭용)
+            perp_meta, perp_asset_ctxs = self.info.meta_and_asset_ctxs()
+            perp_universe = perp_meta['universe']
             
             spot_data = {}
-            token_map = {t['index']: t['name'] for t in tokens}
             
-            for i, asset in enumerate(universe):
-                token_indices = asset.get('tokens', [])
-                if not token_indices: continue
+            # 3. 가격 기반 매칭 로직 (Fuzzy Matching)
+            for i, p_asset in enumerate(perp_universe):
+                p_name = p_asset['name']
+                p_price = float(perp_asset_ctxs[i].get('midPx') or 0)
+                if p_price == 0: continue
                 
-                base_token_index = token_indices[0]
-                name = token_map.get(base_token_index)
+                best_match_idx = -1
+                min_diff = 0.005 # 0.5% 오차 이내
                 
-                if name:
-                    ctx = asset_ctxs[i]
-                    spot_data[name] = {
-                        'midPrice': float(ctx.get('midPx') or 0),
-                        'spot_name': asset['name']
+                for j, s_ctx in enumerate(asset_ctxs):
+                    if j >= len(universe): break
+                    s_price = float(s_ctx.get('midPx') or 0)
+                    if s_price == 0: continue
+                    
+                    diff = abs(p_price - s_price) / p_price
+                    if diff < min_diff:
+                        min_diff = diff
+                        best_match_idx = j
+                
+                if best_match_idx != -1:
+                    s_asset = universe[best_match_idx]
+                    s_ctx = asset_ctxs[best_match_idx]
+                    
+                    spot_data[p_name] = {
+                        'midPrice': float(s_ctx.get('midPx') or 0),
+                        'spot_name': s_asset['name'],
+                        'diff_pct': min_diff * 100
                     }
+                    
+            # 4. 특수 케이스: PURR 등 선물 이름과 현물 이름이 같은 경우 보완
+            for i, s_asset in enumerate(universe):
+                if '/' in s_asset['name']:
+                    base_name = s_asset['name'].split('/')[0]
+                    if base_name not in spot_data:
+                        spot_data[base_name] = {
+                            'midPrice': float(asset_ctxs[i].get('midPx') or 0),
+                            'spot_name': s_asset['name']
+                        }
+            
             return spot_data
         except Exception as e:
-            logging.error(f"Error fetching spot data: {e}")
+            logging.error(f"Error fetching spot data with fuzzy mapping: {e}")
             return None
 
     async def get_balance(self):
