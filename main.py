@@ -29,11 +29,16 @@ async def telegram_worker(notifier):
 
 async def main():
     # --- 모드 설정 ---
-    IS_TESTNET = True          # 테스트넷 사용 여부
+    IS_TESTNET = False         # 테스트넷 사용 여부 (False = 메인넷)
     IS_REAL_TRADING = True     # 실전 주문 전송 여부 (True로 하면 실제 주문이 나감)
     # ----------------
     
-    mode_str = "Testnet Real Trading" if IS_REAL_TRADING and IS_TESTNET else "Paper Trading"
+    if IS_REAL_TRADING and not IS_TESTNET:
+        mode_str = "Mainnet Real Trading"
+    elif IS_REAL_TRADING and IS_TESTNET:
+        mode_str = "Testnet Real Trading"
+    else:
+        mode_str = "Paper Trading"
     logging.info(f"=== Hyperliquid Delta Neutral Bot Started ({mode_str}) ===")
     
     api = HyperliquidAPI(is_testnet=IS_TESTNET)

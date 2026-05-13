@@ -13,17 +13,17 @@ class DeltaNeutralStrategy:
         self.api = api
         self.is_real_trading = is_real_trading
         self.initial_capital = 1000.0  # 가상 원금 $1,000 (Paper Trading용)
-        self.max_positions = 10
+        self.max_positions = 5  # $50 / 5슬롯 = 포지션당 ~$9.5
         state = self._load_state()
         self.positions = state.get("positions", {})
         self.total_realized_profit = state.get("total_realized_profit", 0.0)
         self.notifier = notifier or TelegramNotifier()
         
         self.min_hold_hours = 8
-        self.slippage_rate = 0.01  # 1.0% (Testnet adjusted)
-        self.entry_apy_threshold = 3.0
-        self.exit_apy_threshold = 1.0
-        self.rebalance_gap = 10.0  # 타 종목 APY가 10% 이상 높을 때
+        self.slippage_rate = 0.005  # 0.5% (mainnet 유동성 개선으로 testnet보다 낙춤)
+        self.entry_apy_threshold = 10.0  # mainnet에서 APY 10% 이상만 진입
+        self.exit_apy_threshold = 3.0
+        self.rebalance_gap = 10.0
 
     async def sync_with_exchange(self):
         """실제 거래소의 포지션을 확인하여 내부 상태와 동기화"""
@@ -292,7 +292,7 @@ class DeltaNeutralStrategy:
                             
                             # [사전 검증 2] 실제 잔고 조회
                             actual_balance = await self.api.get_balance()
-                            if actual_balance < 10:
+                            if actual_balance < 5:
                                 logging.error("Insufficient balance for real trading.")
                                 del self.positions[t['symbol']]
                                 continue
