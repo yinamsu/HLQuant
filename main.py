@@ -28,11 +28,17 @@ async def telegram_worker(notifier):
             await asyncio.sleep(5)
 
 async def main():
-    logging.info("=== Hyperliquid Delta Neutral Paper Trading Bot Started ===")
+    # --- 모드 설정 ---
+    IS_TESTNET = True          # 테스트넷 사용 여부
+    IS_REAL_TRADING = True     # 실전 주문 전송 여부 (테스트넷에서도 True로 해야 주문이 나감)
+    # ----------------
     
-    api = HyperliquidAPI()
+    mode_str = "Testnet Real Trading" if IS_REAL_TRADING and IS_TESTNET else "Paper Trading"
+    logging.info(f"=== Hyperliquid Delta Neutral Bot Started ({mode_str}) ===")
+    
+    api = HyperliquidAPI(is_testnet=IS_TESTNET)
     notifier = TelegramNotifier()
-    strategy = DeltaNeutralStrategy(notifier=notifier)
+    strategy = DeltaNeutralStrategy(api=api, notifier=notifier, is_real_trading=IS_REAL_TRADING)
     notifier.strategy = strategy # 양방향 연결
     
     await notifier.set_commands()

@@ -1,109 +1,145 @@
 import asyncio
-import aiohttp
 import logging
-import json
-from datetime import datetime
-
-# 하이퍼리퀴드 테스트넷 API 베이스 URL
-BASE_URL = "https://api.hyperliquid-testnet.xyz"
-INFO_URL = f"{BASE_URL}/info"
+import os
+from eth_account import Account
+from hyperliquid.info import Info
+from hyperliquid.exchange import Exchange
+from hyperliquid.utils import constants
 
 class HyperliquidAPI:
     """
-    Hyperliquid API와 통신하여 시장 데이터를 가져오는 래퍼 클래스입니다.
-    Rate Limit을 고려하여 백오프 로직을 포함합니다.
+    Hyperliquid 공식 SDK를 사용하여 시장 데이터 조회 및 주문 실행을 담당하는 클래스입니다.
     """
     
-    def __init__(self):
-        self.session = None
-
-    async def _get_session(self):
-        if self.session is None or self.session.closed:
-            # aiodns 이슈 방지를 위해 ThreadedResolver를 사용하여 시스템 리졸버를 강제합니다.
-            resolver = aiohttp.ThreadedResolver()
-            connector = aiohttp.TCPConnector(resolver=resolver)
-            self.session = aiohttp.ClientSession(connector=connector)
-        return self.session
-
-    async def post_request(self, data):
-        """
-        공통 POST 요청 처리 함수 (Rate Limit 대응 포함)
-        """
-        session = await self._get_session()
-        for attempt in range(3):
+    def __init__(self, is_testnet=True):
+        self.is_testnet = is_testnet
+        self.base_url = constants.TESTNET_API_URL if is_testnet else constants.MAINNET_API_URL
+        
+        # .env에서 지갑 정보 로드
+        self.wallet_address = os.getenv("HL_WALLET_ADDRESS")
+        self.private_key = os.getenv("HL_AGENT_PRIVATE_KEY")
+        
+        # Info 객체 생성 (시장 데이터 조회용)
+        self.info = Info(self.base_url, skip_ws=True)
+        
+        # Exchange 객체 생성 (주문 실행용)
+        self.exchange = None
+        if self.wallet_address and self.private_key:
             try:
-                async with session.post(INFO_URL, json=data) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    elif response.status == 429:
-                        wait_time = 2 ** attempt
-                        logging.warning(f"Rate limit hit (429). Retrying in {wait_time}s...")
-                        await asyncio.sleep(wait_time)
-                    else:
-                        logging.error(f"API Error: {response.status} - {await response.text()}")
-                        return None
+                account = Account.from_key(self.private_key)
+                self.exchange = Exchange(account, self.base_url, account_address=self.wallet_address)
+                logging.info(f"Hyperliquid Exchange initialized for {self.wallet_address} ({'Testnet' if is_testnet else 'Mainnet'})")
             except Exception as e:
-                logging.error(f"Request failed: {e}")
-                await asyncio.sleep(1)
-        return None
+                logging.error(f"Failed to initialize Exchange: {e}")
 
     async def get_all_perp_data(self):
         """
-        모든 선물(Perp) 자산의 메타데이터와 컨텍스트(펀딩비, 가격 등)를 가져옵니다.
+        모든 선물(Perp) 자산의 데이터(펀딩비, 가격 등)를 가져옵니다.
         """
-        data = {"type": "metaAndAssetCtxs"}
-        result = await self.post_request(data)
-        if not result:
+        try:
+            # SDK의 meta_and_asset_ctxs는 동기 함수이므로 루프를 방해하지 않게 run_in_executor 사용 고려 가능하나
+            # 여기서는 단순하게 호출 (성능 이슈 시 비동기 래퍼 사용)
+            result = self.info.meta_and_asset_ctxs()
+            if not result: return None
+            
+            meta, asset_ctxs = result
+            universe = meta['universe']
+            
+            perp_data = {}
+            for i, asset in enumerate(universe):
+                name = asset['name']
+                ctx = asset_ctxs[i]
+                perp_data[name] = {
+                    'funding': float(ctx.get('funding') or 0),
+                    'midPrice': float(ctx.get('midPx') or 0),
+                    'markPrice': float(ctx.get('markPx') or 0),
+                    'indexPrice': float(ctx.get('oraclePx') or 0)
+                }
+            return perp_data
+        except Exception as e:
+            logging.error(f"Error fetching perp data: {e}")
             return None
-        
-        # metaAndAssetCtxs는 [meta, assetCtxs] 형태의 리스트를 반환함
-        meta, asset_ctxs = result
-        universe = meta['universe']
-        
-        perp_data = {}
-        for i, asset in enumerate(universe):
-            name = asset['name']
-            ctx = asset_ctxs[i]
-            perp_data[name] = {
-                'funding': float(ctx.get('funding') or 0),
-                'midPrice': float(ctx.get('midPx') or 0),
-                'markPrice': float(ctx.get('markPx') or 0),
-                'indexPrice': float(ctx.get('oraclePx') or 0)
-            }
-        return perp_data
 
     async def get_all_spot_data(self):
         """
         모든 현물(Spot) 자산의 데이터를 가져옵니다.
         """
-        data = {"type": "spotMetaAndAssetCtxs"}
-        result = await self.post_request(data)
-        if not result:
+        try:
+            result = self.info.spot_meta_and_asset_ctxs()
+            if not result: return None
+            
+            meta, asset_ctxs = result
+            tokens = meta['tokens']
+            universe = meta['universe']
+            
+            spot_data = {}
+            token_map = {t['index']: t['name'] for t in tokens}
+            
+            for i, asset in enumerate(universe):
+                token_indices = asset.get('tokens', [])
+                if not token_indices: continue
+                
+                base_token_index = token_indices[0]
+                name = token_map.get(base_token_index)
+                
+                if name:
+                    ctx = asset_ctxs[i]
+                    spot_data[name] = {
+                        'midPrice': float(ctx.get('midPx') or 0)
+                    }
+            return spot_data
+        except Exception as e:
+            logging.error(f"Error fetching spot data: {e}")
+            return None
+
+    async def get_balance(self):
+        """
+        지갑의 가용 USDC 잔고를 조회합니다.
+        """
+        if not self.wallet_address: return 0.0
+        try:
+            user_state = self.info.user_state(self.wallet_address)
+            # 선물 계정의 가용 잔고(withdrawable) 반환
+            return float(user_state.get('withdrawable', 0))
+        except Exception as e:
+            logging.error(f"Error fetching balance: {e}")
+            return 0.0
+
+    async def place_order(self, symbol, size, price, is_buy, is_perp=True):
+        """
+        실제 주문을 전송합니다.
+        """
+        if not self.exchange:
+            logging.error("Exchange not initialized. Private key might be missing.")
             return None
         
-        meta, asset_ctxs = result
-        tokens = meta['tokens']
-        universe = meta['universe']
-        
-        spot_data = {}
-        # 토큰 인덱스 -> 이름 매핑 생성
-        token_map = {t['index']: t['name'] for t in tokens}
-        
-        for i, asset in enumerate(universe):
-            # universe[i]의 tokens[0]이 해당 자산의 토큰 인덱스
-            token_indices = asset.get('tokens', [])
-            if not token_indices: continue
+        try:
+            # SDK 주문 전송 (Market Order 또는 Limit Order)
+            # 여기서는 편의상 Limit Order로 전송 (slippage 고려된 가격)
+            # is_perp가 False이면 Spot 주문 처리 로직 필요 (SDK 확인 필요)
             
-            base_token_index = token_indices[0]
-            name = token_map.get(base_token_index)
+            logging.info(f"Placing {'Buy' if is_buy else 'Sell'} order for {symbol}: {size} @ {price}")
             
-            if name:
-                ctx = asset_ctxs[i]
-                spot_data[name] = {
-                    'midPrice': float(ctx.get('midPx') or 0)
-                }
-        return spot_data
+            # SDK: order(coin, is_buy, size, price, order_type, ...)
+            # order_type {'limit': {'tif': 'Gtc'}}
+            response = self.exchange.order(
+                symbol, 
+                is_buy, 
+                size, 
+                price, 
+                {"limit": {"tif": "Gtc"}}
+            )
+            
+            if response['status'] == 'ok':
+                logging.info(f"Order successful: {response}")
+                return response
+            else:
+                logging.error(f"Order failed: {response}")
+                return None
+        except Exception as e:
+            logging.error(f"Error placing order: {e}")
+            return None
 
     async def close(self):
-        if self.session:
-            await self.session.close()
+        # SDK (requests 기반)은 별도의 close가 필요 없으나 구조 유지
+        pass

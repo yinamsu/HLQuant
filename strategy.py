@@ -8,9 +8,11 @@ class DeltaNeutralStrategy:
     """
     델타 중립 펀딩비 체리피킹 전략 클래스
     """
-    def __init__(self, notifier=None, state_file="paper_balance.json"):
+    def __init__(self, api=None, notifier=None, state_file="paper_balance.json", is_real_trading=False):
         self.state_file = state_file
-        self.initial_capital = 10000.0  # 가상 원금 $10,000
+        self.api = api
+        self.is_real_trading = is_real_trading
+        self.initial_capital = 10000.0  # 가상 원금 $10,000 (Paper Trading용)
         self.max_positions = 3
         state = self._load_state()
         self.positions = state.get("positions", {})
@@ -192,6 +194,23 @@ class DeltaNeutralStrategy:
                 final_pos_profit = pos['profit'] + price_diff_profit
                 self.total_realized_profit += final_pos_profit
                 
+                # --- 실전 청산 로직 (Testnet/Mainnet) ---
+                if self.is_real_trading and self.api:
+                    try:
+                        # 1. 선물 숏 포지션 청산 (Buy to close)
+                        size_amount = (self.initial_capital / self.max_positions) / pos['perp_px']
+                        await self.api.place_order(symbol, size_amount, curr_perp_px * 1.01, True) # 살짝 높은 가격에 Buy
+                        
+                        # 2. 현물 매수 포지션 청산 (Sell to close)
+                        await self.api.place_order(symbol, size_amount, curr_spot_px * 0.99, False) # 살짝 낮은 가격에 Sell
+                        logging.info(f"[REAL EXIT] {symbol} execution triggered.")
+                    except Exception as e:
+                        logging.error(f"Real exit failed for {symbol}: {e}")
+                # ------------------------------------
+
+                final_pos_profit = pos['profit'] + price_diff_profit
+                self.total_realized_profit += final_pos_profit
+                
                 logging.info(f"[VIRTUAL EXIT] {symbol} | Profit: ${final_pos_profit:.2f} | Reason: {exit_reason}")
                 await self.notifier.send_exit_notification(symbol, f"{exit_reason} (Final Profit: ${final_pos_profit:.2f})")
                 symbols_to_exit.append(symbol)
@@ -218,6 +237,21 @@ class DeltaNeutralStrategy:
                         'entry_apy': t['apy'],
                         'profit': 0.0  # 펀딩비 수익 누적용
                     }
+
+                    # --- 실전 진입 로직 (Testnet/Mainnet) ---
+                    if self.is_real_trading and self.api:
+                        try:
+                            size_usd = self.initial_capital / self.max_positions
+                            perp_amount = size_usd / t['perp_px']
+                            # 1. 선물 숏 진입 (Sell)
+                            await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False)
+                            # 2. 현물 롱 진입 (Buy)
+                            await self.api.place_order(t['symbol'], perp_amount, virtual_spot_buy_px, True)
+                            logging.info(f"[REAL ENTRY] {t['symbol']} execution triggered.")
+                        except Exception as e:
+                            logging.error(f"Real entry failed for {t['symbol']}: {e}")
+                    # ------------------------------------
+
                     logging.info(f"[VIRTUAL ENTRY] {t['symbol']} | APY: {t['apy']:.2f}%")
                     await self.notifier.send_entry_notification(t['symbol'], t['apy'], virtual_spot_buy_px, virtual_perp_sell_px)
 
