@@ -152,14 +152,21 @@ class TelegramNotifier:
 
     async def get_latest_logs(self, num_lines=15):
         try:
-            if not os.path.exists("bot.log"):
-                return "⚠️ 로그 파일을 찾을 수 없습니다 (bot.log)."
-            with open("bot.log", "r", encoding="utf-8") as f:
+            log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot.log")
+            if not os.path.exists(log_path):
+                # 파일이 없으면 현재 작업 디렉토리에서도 확인
+                log_path = "bot.log"
+                if not os.path.exists(log_path):
+                    return "⚠️ 로그 파일을 찾을 수 없습니다 (bot.log)."
+            
+            with open(log_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 recent_lines = lines[-num_lines:]
                 log_text = "".join(recent_lines)
                 if len(log_text) > 3000:
                     log_text = log_text[-3000:]
-                return f"📝 *[Latest Server Logs]*\n```log\n{log_text}\n```"
+                
+                # 특수문자 충돌 방지를 위해 Markdown 기호 제거 혹은 단순화
+                return f"📝 *[Latest Server Logs]*\n\n{log_text}"
         except Exception as e:
             return f"⚠️ 로그 읽기 오류: {e}"
