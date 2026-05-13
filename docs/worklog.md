@@ -86,6 +86,10 @@
     - Unified the Telegram notification variable names between local and server environments (`TELEGRAM_TOKEN`).
 - **Infrastructure Update**:
     - Handled a GCP External IP change (`136.114.144.64`) by updating `.env` and GitHub Action secrets.
-    - Verified successful live trading: Confirmed real execution of ATOM, GMT, and DYDX orders on the testnet.
+- **State Synchronization & Bug Fixes**:
+    - Fixed a critical state drift issue where virtual positions were created/deleted even if real API orders (`place_order`) failed. Added strict validation (`r1` and `r2` checks) before modifying `self.positions`.
+    - Fixed a bug where `sync_with_exchange` ignored empty exchange states (`new_positions` check removed).
+    - Fixed an accounting bug where unrealized profit was double-counted into `total_realized_profit` upon exit.
+    - Implemented a continuous self-healing mechanism by calling `sync_with_exchange()` every 60 seconds in the `main.py` loop.
 
 *Status: 🟢 24/7 Live Monitoring Active on GCP.*

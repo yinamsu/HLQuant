@@ -52,10 +52,9 @@ class DeltaNeutralStrategy:
                             "profit": 0.0
                         }
             
-            if new_positions:
-                self.positions = new_positions
-                self._save_state()
-                logging.info(f"✅ {len(new_positions)}개의 포지션을 성공적으로 동기화했습니다.")
+            self.positions = new_positions
+            self._save_state()
+            logging.info(f"✅ {len(new_positions)}개의 포지션을 성공적으로 동기화했습니다.")
         except Exception as e:
             logging.error(f"❌ 동기화 중 오류 발생: {e}")
 
@@ -226,23 +225,27 @@ class DeltaNeutralStrategy:
                 price_diff_profit = size_per_pos * (spot_pnl_pct + perp_pnl_pct)
                 
                 final_pos_profit = pos['profit'] + price_diff_profit
-                self.total_realized_profit += final_pos_profit
                 
                 # --- 실전 청산 로직 (Testnet/Mainnet) ---
                 if self.is_real_trading and self.api:
                     try:
                         # 1. 선물 숏 포지션 청산 (Buy to close)
                         size_amount = (self.initial_capital / self.max_positions) / pos['perp_px']
-                        await self.api.place_order(symbol, size_amount, curr_perp_px * 1.01, True) # 살짝 높은 가격에 Buy
+                        r1 = await self.api.place_order(symbol, size_amount, curr_perp_px * 1.01, True) # 살짝 높은 가격에 Buy
                         
                         # 2. 현물 매수 포지션 청산 (Sell to close)
-                        await self.api.place_order(symbol, size_amount, curr_spot_px * 0.99, False) # 살짝 낮은 가격에 Sell
+                        r2 = await self.api.place_order(symbol, size_amount, curr_spot_px * 0.99, False) # 살짝 낮은 가격에 Sell
+                        
+                        if not r1 or not r2:
+                            logging.error(f"Real exit failed for {symbol}. Keeping position.")
+                            continue # 실제 청산 실패 시 가상 청산 건너뛰기
+                            
                         logging.info(f"[REAL EXIT] {symbol} execution triggered.")
                     except Exception as e:
                         logging.error(f"Real exit failed for {symbol}: {e}")
+                        continue
                 # ------------------------------------
 
-                final_pos_profit = pos['profit'] + price_diff_profit
                 self.total_realized_profit += final_pos_profit
                 
                 logging.info(f"[VIRTUAL EXIT] {symbol} | Profit: ${final_pos_profit:.2f} | Reason: {exit_reason}")
@@ -279,6 +282,7 @@ class DeltaNeutralStrategy:
                             actual_balance = await self.api.get_balance()
                             if actual_balance < 10:
                                 logging.error("Insufficient balance for real trading.")
+                                del self.positions[t['symbol']]
                                 continue
                             
                             # 가용 자산의 95%만 사용하여 여유분 확보 (슬리피지 대비)
@@ -287,12 +291,20 @@ class DeltaNeutralStrategy:
                             perp_amount = size_usd / t['perp_px']
                             
                             # 1. 선물 숏 진입 (Sell)
-                            await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False)
+                            r1 = await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False)
                             # 2. 현물 롱 진입 (Buy)
-                            await self.api.place_order(t['symbol'], perp_amount, virtual_spot_buy_px, True)
+                            r2 = await self.api.place_order(t['symbol'], perp_amount, virtual_spot_buy_px, True)
+                            
+                            if not r1 or not r2:
+                                logging.error(f"Real entry failed for {t['symbol']}. Reverting virtual entry.")
+                                del self.positions[t['symbol']]
+                                continue
+                                
                             logging.info(f"[REAL ENTRY] {t['symbol']} execution triggered with size ${size_usd:.2f}")
                         except Exception as e:
                             logging.error(f"Real entry failed for {t['symbol']}: {e}")
+                            del self.positions[t['symbol']]
+                            continue
                     # ------------------------------------
 
                     logging.info(f"[VIRTUAL ENTRY] {t['symbol']} | APY: {t['apy']:.2f}%")

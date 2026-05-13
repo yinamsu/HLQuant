@@ -60,6 +60,10 @@ async def main():
             spot_data = await api.get_all_spot_data()
             
             if perp_data and spot_data is not None:
+                # 1.5. 주기적 동기화로 상태 틀어짐 방지 (자가 치유)
+                if IS_REAL_TRADING:
+                    await strategy.sync_with_exchange()
+                    
                 # 2. 전략 로직 실행
                 await strategy.execute_logic(perp_data, spot_data)
                 
