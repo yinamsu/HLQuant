@@ -61,7 +61,7 @@ async def main():
                 
                 # 현재 상태 출력 (옵션)
                 pos_count = len(strategy.positions)
-                logging.info(f"현재 보유 포지션 수: {pos_count}/3")
+                logging.info(f"현재 보유 포지션 수: {pos_count}/{strategy.max_positions}")
                 for sym, details in strategy.positions.items():
                     logging.info(f" -> {sym}: 진입일시={details['entry_time']}, 진입APY={details['entry_apy']:.2f}%")
             else:

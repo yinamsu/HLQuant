@@ -272,8 +272,8 @@ class DeltaNeutralStrategy:
         return (
             f"📊 *[HLQuant Bot Status]*\n\n"
             f"• *Mode*: {mode_text}\n"
-            f"• *Target Count*: 3 Pairs\n"
-            f"• *Active Positions*: {len(self.positions)}/3\n"
+            f"• *Target Count*: {self.max_positions} Pairs\n"
+            f"• *Active Positions*: {len(self.positions)}/{self.max_positions}\n"
             f"• *Strategy*: Delta-Neutral Arbitrage\n"
             f"• *Last Scan*: {datetime.now().strftime('%H:%M:%S')}"
         )
