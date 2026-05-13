@@ -13,10 +13,50 @@ class DeltaNeutralStrategy:
         self.api = api
         self.is_real_trading = is_real_trading
         self.initial_capital = 1000.0  # 가상 원금 $1,000 (Paper Trading용)
-        self.max_positions = 5
+        self.max_positions = 6
         state = self._load_state()
         self.positions = state.get("positions", {})
         self.total_realized_profit = state.get("total_realized_profit", 0.0)
+        
+        # 실거래 모드인 경우 거래소 데이터와 자동 동기화 시도
+        if self.is_real_trading and self.api:
+            self.sync_with_exchange()
+
+    def sync_with_exchange(self):
+        """실제 거래소의 포지션을 확인하여 내부 상태와 동기화"""
+        try:
+            logging.info("🔄 거래소 포지션과 내부 상태 동기화 시도 중...")
+            balance = self.api.get_balance()
+            # 포지션 정보 추출 (Hyperliquid API 응답 구조에 따라 조정)
+            # 여기서는 API 클래스의 get_balance가 리턴하는 구조를 활용하거나 직접 호출
+            user_state = self.api.get_user_state()
+            asset_positions = user_state.get('assetPositions', [])
+            
+            new_positions = {}
+            for pos in asset_positions:
+                p = pos.get('position', {})
+                symbol = p.get('coin')
+                size = float(p.get('szi', 0))
+                if abs(size) > 0:
+                    # 기존에 관리하던 포지션이면 유지, 없으면 신규 등록
+                    if symbol in self.positions:
+                        new_positions[symbol] = self.positions[symbol]
+                    else:
+                        new_positions[symbol] = {
+                            "entry_time": datetime.now().isoformat(),
+                            "last_update": datetime.now().isoformat(),
+                            "spot_px": float(p.get('entryPx', 0)),
+                            "perp_px": float(p.get('entryPx', 0)),
+                            "entry_apy": 10.95, # 기본값
+                            "profit": 0.0
+                        }
+            
+            if new_positions:
+                self.positions = new_positions
+                self._save_state()
+                logging.info(f"✅ {len(new_positions)}개의 포지션을 성공적으로 동기화했습니다.")
+        except Exception as e:
+            logging.error(f"❌ 동기화 중 오류 발생: {e}")
         
         self.min_hold_hours = 8
         self.slippage_rate = 0.0005  # 0.05%
