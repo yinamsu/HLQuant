@@ -135,11 +135,26 @@ class TelegramNotifier:
             if cmd == "/server":
                 await self.send_message(await self.get_system_stats())
             elif cmd == "/status":
-                await self.send_message(self.strategy.get_status_summary() if self.strategy else "전략 연결 안됨")
+                if self.strategy:
+                    res = self.strategy.get_status_summary()
+                    if asyncio.iscoroutine(res): res = await res
+                    await self.send_message(res)
+                else:
+                    await self.send_message("전략 연결 안됨")
             elif cmd == "/positions":
-                await self.send_message(self.strategy.get_positions_summary() if self.strategy else "전략 연결 안됨")
+                if self.strategy:
+                    res = self.strategy.get_positions_summary()
+                    if asyncio.iscoroutine(res): res = await res
+                    await self.send_message(res)
+                else:
+                    await self.send_message("전략 연결 안됨")
             elif cmd == "/balance":
-                await self.send_message(self.strategy.get_balance_summary() if self.strategy else "전략 연결 안됨")
+                if self.strategy:
+                    res = self.strategy.get_balance_summary()
+                    if asyncio.iscoroutine(res): res = await res
+                    await self.send_message(res)
+                else:
+                    await self.send_message("전략 연결 안됨")
             elif cmd == "/logs":
                 await self.send_message(await self.get_latest_logs())
             elif cmd == "/help":

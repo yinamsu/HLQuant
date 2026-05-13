@@ -345,8 +345,26 @@ class DeltaNeutralStrategy:
             f"• *Last Scan*: {datetime.now().strftime('%H:%M:%S')}"
         )
 
-    def get_balance_summary(self):
-        """수익률 요약 반환 (현재 가상 매매 기준)"""
+    async def get_balance_summary(self):
+        """수익률 요약 반환 (현재 가상 매매 기준 또는 실전 잔고)"""
+        if self.is_real_trading and self.api:
+            try:
+                user_state = await self.api.get_user_state()
+                margin_summary = user_state.get('marginSummary', {})
+                account_value = float(margin_summary.get('accountValue', 0.0))
+                
+                text = (
+                    f"💰 *[HLQuant Live Portfolio Report]*\n\n"
+                    f"• *Real Portfolio Value*: ${account_value:,.2f}\n\n"
+                    f"📝 *Virtual Paper Ledger Status*\n"
+                    f"• *Paper Initial*: ${self.initial_capital:,.2f}\n"
+                    f"• *Paper Realized PnL*: ${self.total_realized_profit:+,.2f}\n\n"
+                    f"• *Status*: 🟢 Live API Connected"
+                )
+                return text
+            except Exception as e:
+                pass
+                
         unrealized_profit = sum(p.get('profit', 0.0) for p in self.positions.values())
         total_equity = self.initial_capital + self.total_realized_profit + unrealized_profit
         total_pnl = self.total_realized_profit + unrealized_profit
@@ -355,14 +373,14 @@ class DeltaNeutralStrategy:
         status_emoji = "🟢" if total_pnl >= 0 else "🔴"
         
         text = (
-            f"💰 *[HLQuant Portfolio Report]*\n\n"
+            f"💰 *[HLQuant Virtual Portfolio Report]*\n\n"
             f"• *Initial Capital*: ${self.initial_capital:,.2f}\n"
             f"• *Total Equity*: ${total_equity:,.2f}\n"
             f"• *Total PnL*: ${total_pnl:+,.2f}\n"
             f"• *ROI*: {roi:+.3f}%\n\n"
             f"📈 *Details*\n"
             f"• Realized: ${self.total_realized_profit:+,.2f}\n"
-            f"• Unreleased (Accruing): ${unrealized_profit:+,.2f}\n\n"
+            f"• Unrealized (Accruing): ${unrealized_profit:+,.2f}\n\n"
             f"• *Status*: {status_emoji} Stable Monitoring"
         )
         return text
