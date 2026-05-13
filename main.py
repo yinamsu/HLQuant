@@ -46,7 +46,7 @@ async def main():
     notifier.strategy = strategy # 양방향 연결
     
     await notifier.set_commands()
-    await notifier.send_message("✅ *HLQuant Bot 가동 시작* (Paper Trading Mode)")
+    await notifier.send_message(f"✅ *HLQuant Bot 가동 시작* ({mode_str})")
     
     # 텔레그램 리스너를 백그라운드 태스크로 시작
     asyncio.create_task(telegram_worker(notifier))
