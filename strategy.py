@@ -349,13 +349,26 @@ class DeltaNeutralStrategy:
         """수익률 요약 반환 (현재 가상 매매 기준 또는 실전 잔고)"""
         if self.is_real_trading and self.api:
             try:
+                # 1. Perp 계정 가치
                 user_state = await self.api.get_user_state()
                 margin_summary = user_state.get('marginSummary', {})
-                account_value = float(margin_summary.get('accountValue', 0.0))
+                perp_value = float(margin_summary.get('accountValue', 0.0))
+                
+                # 2. Spot 계정 잔고 합산
+                spot_value = 0.0
+                spot_state = self.api.info.spot_user_state(self.api.wallet_address)
+                for balance in spot_state.get('balances', []):
+                    # 간략화를 위해 USDC 현금 잔고만 합산 (실제 코인 가치는 생략하거나 나중에 고도화)
+                    if balance.get('coin') == 'USDC':
+                        spot_value += float(balance.get('total', 0.0))
+                        
+                account_value = perp_value + spot_value
                 
                 text = (
                     f"💰 *[HLQuant Live Portfolio Report]*\n\n"
-                    f"• *Real Portfolio Value*: ${account_value:,.2f}\n\n"
+                    f"• *Real Portfolio Value*: ${account_value:,.2f}\n"
+                    f"  - Spot USDC: ${spot_value:,.2f}\n"
+                    f"  - Perp Equity: ${perp_value:,.2f}\n\n"
                     f"📝 *Virtual Paper Ledger Status*\n"
                     f"• *Paper Initial*: ${self.initial_capital:,.2f}\n"
                     f"• *Paper Realized PnL*: ${self.total_realized_profit:+,.2f}\n\n"
@@ -363,6 +376,7 @@ class DeltaNeutralStrategy:
                 )
                 return text
             except Exception as e:
+                logging.error(f"Error getting live portfolio value: {e}")
                 pass
                 
         unrealized_profit = sum(p.get('profit', 0.0) for p in self.positions.values())

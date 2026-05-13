@@ -95,14 +95,23 @@ class HyperliquidAPI:
 
     async def get_balance(self):
         """
-        지갑의 가용 USDC 잔고를 조회합니다.
+        지갑의 가용 USDC 잔고를 조회합니다. (Perp 및 Spot 통합 확인)
         """
         try:
+            # 1. Perp 계정 잔고 (marginSummary)
             user_state = self.info.user_state(self.wallet_address)
-            # 'cash'가 없으면 'withdrawable' 또는 'marginSummary'의 'accountValue' 사용
-            cash = user_state.get('cash')
-            if cash is None:
+            cash = user_state.get('withdrawable', 0.0)
+            if float(cash) == 0.0:
                 cash = user_state.get('marginSummary', {}).get('accountValue', 0.0)
+                
+            # 2. 만약 Perp 잔고가 0에 가깝다면 Spot 계정의 USDC 확인
+            if float(cash) < 1.0:
+                spot_state = self.info.spot_user_state(self.wallet_address)
+                for balance in spot_state.get('balances', []):
+                    if balance.get('coin') == 'USDC':
+                        cash = float(balance.get('total', 0.0))
+                        break
+                        
             return float(cash)
         except Exception as e:
             logging.error(f"Error fetching balance: {e}")
