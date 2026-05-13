@@ -1,45 +1,29 @@
 {
     "positions": {
-        "DYDX": {
-            "entry_time": "2026-05-13T10:48:44",
-            "last_update": "2026-05-13T11:13:00",
-            "spot_px": 0.16188,
-            "perp_px": 0.16188,
-            "entry_apy": 10.95,
-            "profit": 0.0
+        "APT": {
+            "entry_time": "2026-05-13T19:29:42.638845",
+            "last_update": "2026-05-13T20:17:10.819281",
+            "spot_px": 1.1102548499999998,
+            "perp_px": 1.1090452,
+            "entry_apy": 10.950000000000001,
+            "profit": 0.032965051342592595
         },
         "GMT": {
-            "entry_time": "2026-05-13T10:48:44",
-            "last_update": "2026-05-13T11:13:00",
-            "spot_px": 0.01318,
-            "perp_px": 0.01318,
-            "entry_apy": 10.95,
-            "profit": 0.0
+            "entry_time": "2026-05-13T19:29:42.638845",
+            "last_update": "2026-05-13T20:17:10.819281",
+            "spot_px": 0.013175584499999999,
+            "perp_px": 0.013165414,
+            "entry_apy": 10.950000000000001,
+            "profit": 0.032965051342592595
         },
-        "AVAX": {
-            "entry_time": "2026-05-13T10:48:44",
-            "last_update": "2026-05-13T11:13:00",
-            "spot_px": 10.082,
-            "perp_px": 10.082,
-            "entry_apy": 10.95,
-            "profit": 0.0
-        },
-        "ATOM": {
-            "entry_time": "2026-05-13T10:48:44",
-            "last_update": "2026-05-13T11:13:00",
-            "spot_px": 2.1605,
-            "perp_px": 2.1605,
-            "entry_apy": 10.95,
-            "profit": 0.0
-        },
-        "APT": {
-            "entry_time": "2026-05-13T10:48:44",
-            "last_update": "2026-05-13T11:13:00",
-            "spot_px": 1.1111,
-            "perp_px": 1.1111,
-            "entry_apy": 10.95,
-            "profit": 0.0
+        "DYDX": {
+            "entry_time": "2026-05-13T19:40:54.044417",
+            "last_update": "2026-05-13T20:17:10.819281",
+            "spot_px": 0.16186089,
+            "perp_px": 0.161709105,
+            "entry_apy": 10.950000000000001,
+            "profit": 0.025194153518518527
         }
     },
-    "total_realized_profit": -2.17
+    "total_realized_profit": 4.132677257347587
 }
