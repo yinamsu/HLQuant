@@ -8,10 +8,11 @@ class DeltaNeutralStrategy:
     """
     델타 중립 펀딩비 체리피킹 전략 클래스
     """
-    def __init__(self, api=None, notifier=None, state_file="paper_balance.json", is_real_trading=False):
+    def __init__(self, api=None, notifier=None, state_file="paper_balance.json", is_real_trading=False, is_testnet=False):
         self.state_file = state_file
         self.api = api
         self.is_real_trading = is_real_trading
+        self.is_testnet = is_testnet
         self.initial_capital = 1000.0  # 가상 원금 $1,000 (Paper Trading용)
         self.max_positions = 5  # $50 / 5슬롯 = 포지션당 ~$9.5
         state = self._load_state()
@@ -338,7 +339,12 @@ class DeltaNeutralStrategy:
 
     def get_status_summary(self):
         """봇 가동 상태 요약 반환"""
-        mode_text = "Testnet Real Trading" if self.is_real_trading else "Paper Trading"
+        if self.is_real_trading and not self.is_testnet:
+            mode_text = "🔴 Mainnet Real Trading"
+        elif self.is_real_trading and self.is_testnet:
+            mode_text = "🟡 Testnet Real Trading"
+        else:
+            mode_text = "📄 Paper Trading"
         return (
             f"📊 *[HLQuant Bot Status]*\n\n"
             f"• *Mode*: {mode_text}\n"
