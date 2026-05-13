@@ -39,6 +39,10 @@ async def main():
     api = HyperliquidAPI(is_testnet=IS_TESTNET)
     notifier = TelegramNotifier()
     strategy = DeltaNeutralStrategy(api=api, notifier=notifier, is_real_trading=IS_REAL_TRADING)
+    
+    # 서버 시작 시 거래소 포지션과 자동 동기화
+    if IS_REAL_TRADING:
+        await strategy.sync_with_exchange()
     notifier.strategy = strategy # 양방향 연결
     
     await notifier.set_commands()

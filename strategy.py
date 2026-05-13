@@ -17,19 +17,20 @@ class DeltaNeutralStrategy:
         state = self._load_state()
         self.positions = state.get("positions", {})
         self.total_realized_profit = state.get("total_realized_profit", 0.0)
+        self.notifier = notifier or TelegramNotifier()
         
-        # 실거래 모드인 경우 거래소 데이터와 자동 동기화 시도
-        if self.is_real_trading and self.api:
-            self.sync_with_exchange()
+        self.min_hold_hours = 8
+        self.slippage_rate = 0.0005  # 0.05%
+        self.entry_apy_threshold = 3.0
+        self.exit_apy_threshold = 1.0
+        self.rebalance_gap = 10.0  # 타 종목 APY가 10% 이상 높을 때
 
-    def sync_with_exchange(self):
+    async def sync_with_exchange(self):
         """실제 거래소의 포지션을 확인하여 내부 상태와 동기화"""
         try:
             logging.info("🔄 거래소 포지션과 내부 상태 동기화 시도 중...")
-            balance = self.api.get_balance()
-            # 포지션 정보 추출 (Hyperliquid API 응답 구조에 따라 조정)
-            # 여기서는 API 클래스의 get_balance가 리턴하는 구조를 활용하거나 직접 호출
-            user_state = self.api.get_user_state()
+            # get_user_state가 내부적으로 정보를 가져옴
+            user_state = await self.api.get_user_state()
             asset_positions = user_state.get('assetPositions', [])
             
             new_positions = {}
@@ -57,13 +58,6 @@ class DeltaNeutralStrategy:
                 logging.info(f"✅ {len(new_positions)}개의 포지션을 성공적으로 동기화했습니다.")
         except Exception as e:
             logging.error(f"❌ 동기화 중 오류 발생: {e}")
-        
-        self.min_hold_hours = 8
-        self.slippage_rate = 0.0005  # 0.05%
-        self.entry_apy_threshold = 3.0
-        self.exit_apy_threshold = 1.0
-        self.rebalance_gap = 10.0  # 타 종목 APY가 10% 이상 높을 때
-        self.notifier = notifier or TelegramNotifier()
 
     def get_status_summary(self):
         """현재 시장 상태 및 상위 APY 요약 (메모리상의 최근 데이터 기준)"""
