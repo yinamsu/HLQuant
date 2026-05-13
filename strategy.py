@@ -231,10 +231,15 @@ class DeltaNeutralStrategy:
                     try:
                         # 1. 선물 숏 포지션 청산 (Buy to close)
                         size_amount = (self.initial_capital / self.max_positions) / pos['perp_px']
-                        r1 = await self.api.place_order(symbol, size_amount, curr_perp_px * 1.01, True) # 살짝 높은 가격에 Buy
+                        r1 = await self.api.place_order(symbol, size_amount, curr_perp_px * 1.01, True, is_perp=True)
                         
+                        spot_name = spot_data.get(symbol, {}).get('spot_name')
+                        if not spot_name:
+                            logging.error(f"Cannot find spot name for exit {symbol}")
+                            continue
+                            
                         # 2. 현물 매수 포지션 청산 (Sell to close)
-                        r2 = await self.api.place_order(symbol, size_amount, curr_spot_px * 0.99, False) # 살짝 낮은 가격에 Sell
+                        r2 = await self.api.place_order(spot_name, size_amount, curr_spot_px * 0.99, False, is_perp=False)
                         
                         if not r1 or not r2:
                             logging.error(f"Real exit failed for {symbol}. Keeping position.")
@@ -291,9 +296,16 @@ class DeltaNeutralStrategy:
                             perp_amount = size_usd / t['perp_px']
                             
                             # 1. 선물 숏 진입 (Sell)
-                            r1 = await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False)
+                            r1 = await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False, is_perp=True)
+                            
+                            spot_name = spot_data.get(t['symbol'], {}).get('spot_name')
+                            if not spot_name:
+                                logging.error(f"Cannot find spot name for entry {t['symbol']}")
+                                del self.positions[t['symbol']]
+                                continue
+                                
                             # 2. 현물 롱 진입 (Buy)
-                            r2 = await self.api.place_order(t['symbol'], perp_amount, virtual_spot_buy_px, True)
+                            r2 = await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px, True, is_perp=False)
                             
                             if not r1 or not r2:
                                 logging.error(f"Real entry failed for {t['symbol']}. Reverting virtual entry.")

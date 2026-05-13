@@ -89,7 +89,9 @@
 - **State Synchronization & Bug Fixes**:
     - Fixed a critical state drift issue where virtual positions were created/deleted even if real API orders (`place_order`) failed. Added strict validation (`r1` and `r2` checks) before modifying `self.positions`.
     - Fixed a bug where `sync_with_exchange` ignored empty exchange states (`new_positions` check removed).
-    - Fixed an accounting bug where unrealized profit was double-counted into `total_realized_profit` upon exit.
-    - Implemented a continuous self-healing mechanism by calling `sync_with_exchange()` every 60 seconds in the `main.py` loop.
+- **Spot Routing & Order Execution Fixes**:
+    - Fixed a massive flaw where spot orders were being sent as perp orders (ignoring the `is_perp` flag). The `hyperliquid_api.py` now correctly resolves the actual spot name (`spot_name`) from the `spot_meta` universe and passes it during `place_order`.
+    - Changed all limit orders (`tif: "Gtc"`) to Immediate Or Cancel (`tif: "Ioc"`) to prevent unfillable limit orders from resting in the order book and spamming the bot's state.
+    - Added rigorous error checking inside the `response.get('data').get('statuses')` array to catch internal exchange rejections (e.g., Margin errors) that previously returned a superficial `'ok'` status.
 
 *Status: 🟢 24/7 Live Monitoring Active on GCP.*
