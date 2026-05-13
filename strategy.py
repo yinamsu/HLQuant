@@ -10,7 +10,12 @@ class DeltaNeutralStrategy:
     """
     def __init__(self, notifier=None, state_file="paper_balance.json"):
         self.state_file = state_file
-        self.positions = self._load_state()
+        self.initial_capital = 10000.0  # 가상 원금 $10,000
+        self.max_positions = 3
+        state = self._load_state()
+        self.positions = state.get("positions", {})
+        self.total_realized_profit = state.get("total_realized_profit", 0.0)
+        
         self.min_hold_hours = 8
         self.slippage_rate = 0.0005  # 0.05%
         self.entry_apy_threshold = 3.0
@@ -67,14 +72,21 @@ class DeltaNeutralStrategy:
         if os.path.exists(self.state_file):
             try:
                 with open(self.state_file, "r") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # 하위 호환성 유지
+                    if "positions" not in data:
+                        return {"positions": data, "total_realized_profit": 0.0}
+                    return data
             except:
-                return {}
-        return {}
+                return {"positions": {}, "total_realized_profit": 0.0}
+        return {"positions": {}, "total_realized_profit": 0.0}
 
     def _save_state(self):
         with open(self.state_file, "w") as f:
-            json.dump(self.positions, f, indent=4)
+            json.dump({
+                "positions": self.positions,
+                "total_realized_profit": self.total_realized_profit
+            }, f, indent=4)
 
     def calculate_apy(self, funding_rate):
         """
@@ -128,33 +140,60 @@ class DeltaNeutralStrategy:
 
     async def execute_logic(self, perp_data, spot_data):
         """
-        전략 실행 메인 루프 (진입, 청산, 리밸런싱 판단)
+        전략 실행 메인 루프 (진입, 청산, 리밸런싱 판단 및 수익 정산)
         """
         current_time = datetime.now()
         
-        # 1. 기존 포지션 체크 및 청산/리밸런싱 판단
+        # 1. 기존 포지션 수익 업데이트 및 청산 판단
         symbols_to_exit = []
         for symbol, pos in list(self.positions.items()):
             if symbol not in perp_data: continue
             
-            curr_apy = self.calculate_apy(perp_data[symbol]['funding'])
+            p_data = perp_data[symbol]
+            curr_funding = p_data['funding']
+            curr_apy = self.calculate_apy(curr_funding)
+            
+            # --- 수익 정산 로직 ---
+            # 마지막 업데이트 이후 경과 시간 계산
+            last_update = datetime.fromisoformat(pos.get('last_update', pos['entry_time']))
+            elapsed_seconds = (current_time - last_update).total_seconds()
+            
+            # 펀딩비 수익 누적 (1시간당 funding_rate만큼 수익 발생 가정)
+            size_per_pos = self.initial_capital / self.max_positions
+            funding_profit = size_per_pos * curr_funding * (elapsed_seconds / 3600)
+            pos['profit'] = pos.get('profit', 0.0) + funding_profit
+            pos['last_update'] = current_time.isoformat()
+            # --------------------
+
             entry_time = datetime.fromisoformat(pos['entry_time'])
             hold_duration = (current_time - entry_time).total_seconds() / 3600
             
-            # 청산 조건 1: APY 5% 이하
+            # 청산 조건 판단
             exit_reason = None
             if curr_apy <= self.exit_apy_threshold:
                 exit_reason = f"Low APY ({curr_apy:.2f}%)"
             
-            # 리밸런싱 조건: 타 종목 APY가 현재보다 20% 이상 높고 최소 유지시간 경과
             if not exit_reason and hold_duration >= self.min_hold_hours:
                 targets = self.get_targets(perp_data, spot_data)
                 if targets and targets[0]['apy'] > curr_apy + self.rebalance_gap:
                     exit_reason = f"Rebalancing (Better opportunity: {targets[0]['symbol']} @ {targets[0]['apy']:.2f}%)"
             
             if exit_reason:
-                logging.info(f"[VIRTUAL EXIT] {symbol} | Reason: {exit_reason}")
-                await self.notifier.send_exit_notification(symbol, exit_reason)
+                # 청산 시 미실현 손익(가격차이) 정산
+                curr_spot_px = spot_data.get(symbol, {}).get('midPrice', p_data['indexPrice'])
+                curr_perp_px = p_data['midPrice']
+                
+                # Spot PnL = (Close - Open) / Open
+                # Perp PnL = (Open - Close) / Open (Short position)
+                spot_pnl_pct = (curr_spot_px - pos['spot_px']) / pos['spot_px']
+                perp_pnl_pct = (pos['perp_px'] - curr_perp_px) / pos['perp_px']
+                price_diff_profit = size_per_pos * (spot_pnl_pct + perp_pnl_pct)
+                
+                final_pos_profit = pos['profit'] + price_diff_profit
+                self.total_realized_profit += final_pos_profit
+                
+                logging.info(f"[VIRTUAL EXIT] {symbol} | Profit: ${final_pos_profit:.2f} | Reason: {exit_reason}")
+                await self.notifier.send_exit_notification(symbol, f"{exit_reason} (Final Profit: ${final_pos_profit:.2f})")
                 symbols_to_exit.append(symbol)
 
         # 포지션 제거
@@ -162,22 +201,24 @@ class DeltaNeutralStrategy:
             del self.positions[symbol]
         
         # 2. 신규 진입 판단
-        if len(self.positions) < 3:
+        if len(self.positions) < self.max_positions:
             targets = self.get_targets(perp_data, spot_data)
             for t in targets:
-                if len(self.positions) >= 3: break
+                if len(self.positions) >= self.max_positions: break
                 if t['symbol'] not in self.positions:
-                    # 슬리피지 반영 (현물 매수는 높게, 선물 매도는 낮게 체결 가정)
+                    # 슬리피지 반영
                     virtual_spot_buy_px = t['spot_px'] * (1 + self.slippage_rate)
                     virtual_perp_sell_px = t['perp_px'] * (1 - self.slippage_rate)
                     
                     self.positions[t['symbol']] = {
                         'entry_time': current_time.isoformat(),
+                        'last_update': current_time.isoformat(),
                         'spot_px': virtual_spot_buy_px,
                         'perp_px': virtual_perp_sell_px,
-                        'entry_apy': t['apy']
+                        'entry_apy': t['apy'],
+                        'profit': 0.0  # 펀딩비 수익 누적용
                     }
-                    logging.info(f"[VIRTUAL ENTRY] {t['symbol']} | APY: {t['apy']:.2f}% | SpotPx: {virtual_spot_buy_px:.4f} | PerpPx: {virtual_perp_sell_px:.4f}")
+                    logging.info(f"[VIRTUAL ENTRY] {t['symbol']} | APY: {t['apy']:.2f}%")
                     await self.notifier.send_entry_notification(t['symbol'], t['apy'], virtual_spot_buy_px, virtual_perp_sell_px)
 
         self._save_state()
@@ -195,15 +236,25 @@ class DeltaNeutralStrategy:
 
     def get_balance_summary(self):
         """수익률 요약 반환 (현재 가상 매매 기준)"""
-        # 가상 원금 $10,000 기준 (추후 실거래 연동 가능)
-        total_profit = sum(p.get('profit', 0) for p in self.positions.values())
-        return (
-            f"💰 *[Virtual Balance]*\n\n"
-            f"• *Initial Equity*: $10,000.00\n"
-            f"• *Current Profit*: ${total_profit:.2f}\n"
-            f"• *ROI*: {(total_profit/10000)*100:.2f}%\n"
-            f"• *Status*: Stable 🟢"
+        unrealized_profit = sum(p.get('profit', 0.0) for p in self.positions.values())
+        total_equity = self.initial_capital + self.total_realized_profit + unrealized_profit
+        total_pnl = self.total_realized_profit + unrealized_profit
+        roi = (total_pnl / self.initial_capital) * 100
+
+        status_emoji = "🟢" if total_pnl >= 0 else "🔴"
+        
+        text = (
+            f"💰 *[HLQuant Portfolio Report]*\n\n"
+            f"• *Initial Capital*: ${self.initial_capital:,.2f}\n"
+            f"• *Total Equity*: ${total_equity:,.2f}\n"
+            f"• *Total PnL*: ${total_pnl:+,.2f}\n"
+            f"• *ROI*: {roi:+.3f}%\n\n"
+            f"📈 *Details*\n"
+            f"• Realized: ${self.total_realized_profit:+,.2f}\n"
+            f"• Unreleased (Accruing): ${unrealized_profit:+,.2f}\n\n"
+            f"• *Status*: {status_emoji} Stable Monitoring"
         )
+        return text
 
     def get_positions_summary(self):
         """현재 보유 포지션 상세 반환"""
