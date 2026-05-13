@@ -27,6 +27,7 @@ class TelegramNotifier:
             {"command": "status", "description": "봇 가동 상태 요약"},
             {"command": "balance", "description": "가상 수익률 확인"},
             {"command": "positions", "description": "보유 포지션 상세"},
+            {"command": "logs", "description": "서버 최근 로그 확인"},
             {"command": "help", "description": "도움말"}
         ]
         try:
@@ -139,10 +140,26 @@ class TelegramNotifier:
                 await self.send_message(self.strategy.get_positions_summary() if self.strategy else "전략 연결 안됨")
             elif cmd == "/balance":
                 await self.send_message(self.strategy.get_balance_summary() if self.strategy else "전략 연결 안됨")
+            elif cmd == "/logs":
+                await self.send_message(await self.get_latest_logs())
             elif cmd == "/help":
-                await self.send_message("명령어: /server, /status, /positions, /balance, /help")
+                await self.send_message("명령어: /server, /status, /positions, /balance, /logs, /help")
             elif cmd == "/start":
                 await self.send_message("HLQuant 봇 시작! /help를 입력하세요.")
         except Exception as e:
             logging.error(f"Command execution error ({cmd}): {e}")
             await self.send_message(f"⚠️ 명령어 처리 중 오류 발생: {e}")
+
+    async def get_latest_logs(self, num_lines=15):
+        try:
+            if not os.path.exists("bot.log"):
+                return "⚠️ 로그 파일을 찾을 수 없습니다 (bot.log)."
+            with open("bot.log", "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                recent_lines = lines[-num_lines:]
+                log_text = "".join(recent_lines)
+                if len(log_text) > 3000:
+                    log_text = log_text[-3000:]
+                return f"📝 *[Latest Server Logs]*\n```log\n{log_text}\n```"
+        except Exception as e:
+            return f"⚠️ 로그 읽기 오류: {e}"
