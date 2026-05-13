@@ -283,7 +283,14 @@ class DeltaNeutralStrategy:
                     # --- 실전 진입 로직 (Testnet/Mainnet) ---
                     if self.is_real_trading and self.api:
                         try:
-                            # 실제 잔고 조회
+                            # [사전 검증 1] 현물 심볼 존재 여부를 가장 먼저 확인 - 없으면 선물도 넣지 않음
+                            spot_name = spot_data.get(t['symbol'], {}).get('spot_name')
+                            if not spot_name:
+                                logging.error(f"[PRE-CHECK FAIL] No spot market for {t['symbol']} on this network — skipping entry")
+                                del self.positions[t['symbol']]
+                                continue
+                            
+                            # [사전 검증 2] 실제 잔고 조회
                             actual_balance = await self.api.get_balance()
                             if actual_balance < 10:
                                 logging.error("Insufficient balance for real trading.")
@@ -298,12 +305,7 @@ class DeltaNeutralStrategy:
                             # 1. 선물 숏 진입 (Sell)
                             r1 = await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False, is_perp=True)
                             
-                            spot_name = spot_data.get(t['symbol'], {}).get('spot_name')
-                            if not spot_name:
-                                logging.error(f"Cannot find spot name for entry {t['symbol']}")
-                                del self.positions[t['symbol']]
-                                continue
-                                
+
                             # 2. 현물 롱 진입 (Buy)
                             r2 = await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px, True, is_perp=False)
                             
