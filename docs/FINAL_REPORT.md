@@ -13,7 +13,7 @@ Hyperliquid 거래소의 델타 중립(Delta Neutral) 차익거래 전략을 자
 - **배포**: GitHub Actions (CI/CD) -> GCP VM Instance
 
 ## 3. 인프라 구성 내역
-- **서버 호스트**: GCP (IP: 34.136.45.224)
+- **서버 호스트**: GCP (IP: 136.114.144.64)
 - **운영 환경**: Ubuntu Linux (Managed via systemd)
 - **보안 설정**:
   - `.env` 파일을 통한 환경 변수 격리 (API Key, SSH Key, Bot Token)
@@ -22,20 +22,19 @@ Hyperliquid 거래소의 델타 중립(Delta Neutral) 차익거래 전략을 자
 
 ## 4. 텔레그램 봇 시스템 (HLQuantBot)
 - **알림 기능**:
-    - 가상 진입/청산 시 실시간 알림 전송 (APY, 가격 정보 포함)
+    - 실전/가상 진입 및 청산 시 실시간 알림 전송 (APY, 가격 정보 포함)
     - 봇 시작/종료 시 가동 상태 보고
 - **인터랙티브 명령어**:
+    - `/status`: 현재 가동 모드(Testnet Real) 및 포지션 현황 요약
+    - `/balance`: 총 자산, PnL, ROI 등 수익률 보고
+    - `/positions`: 현재 보유 중인 개별 포지션 상세 정보
     - `/server`: 서버 리소스(CPU, RAM, SWAP, DISK) 상태 보고 (Alpha Dashboard 디자인)
     - `/help`: 명령어 도움말 제공
-- **지능형 기능**:
-    - **중복 답변 방지**: `last_update_id` 추적을 통해 동일 명령어에 한 번만 응답.
-    - **시작 시 큐 클리어**: 가동 직전의 과거 메시지들을 무시하여 도배 방지.
 
-## 5. CI/CD 배포 파이프라인
-1. **Push**: 로컬에서 `main` 브랜치로 코드 푸시.
-2. **Action**: GitHub Actions가 트리거되어 서버에 SSH 접속.
-3. **Deploy**: `deploy.sh` 실행 (최신 코드 Pull -> 의존성 설치 -> 서비스 재시작).
-4. **Notify**: 봇이 재시작되며 텔레그램으로 가동 시작 알림 전송.
+## 5. 실전 배포 최적화 (2026-05-13 업데이트)
+- **정밀도 제어**: Hyperliquid API 특성에 맞춘 수량(szDecimals) 및 가격(5 significant figures) 반올림 로직 완비.
+- **자산 관리**: 실제 지갑 잔고에 기반한 동기적 포지션 사이징 로직 적용 (95% Margin Guard).
+- **안정성 강화**: 서버 Python 3.10 환경에 맞춘 의존성(requirements.txt) 최적화로 CPU 부하 및 크래시 루프 해결.
 
 ## 6. 유지보수 가이드
 - **서비스 상태 확인**: `sudo systemctl status hlquant.service`
@@ -44,5 +43,5 @@ Hyperliquid 거래소의 델타 중립(Delta Neutral) 차익거래 전략을 자
 - **설정 변경**: 서버의 `~/HLQuant/.env` 파일 수정 후 서비스 재시작.
 
 ---
-**작성일**: 2026-05-12
-**상태**: 운영(Production) Ready - 가상 매매 모드 가동 중
+**작성일**: 2026-05-13 (최종 수정)
+**상태**: 🟢 실전 가동 중 (Hyperliquid Testnet Real Trading)

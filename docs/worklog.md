@@ -67,5 +67,25 @@
     - Implemented a command listener loop in `main.py` (checks every 5 seconds).
     - Updated `requirements.txt` with `psutil`.
 
----
-*Next Step: Long-term monitoring and further command implementation.*
+## 2026-05-13
+### Live Deployment & Stabilization (GCP)
+- **Environment Transition**: Transitioned from Paper Trading to **Testnet Real Trading**.
+- **Wallet Integration**: Configured `HL_WALLET_ADDRESS` and `HL_AGENT_PRIVATE_KEY` for live execution.
+- **Precision Fixes**:
+    - Resolved `float_to_wire causes rounding` errors by implementing `szDecimals` based rounding for order sizes.
+    - Implemented strict 5-significant-figures rounding for prices to satisfy Hyperliquid API constraints.
+- **Dynamic Sizing**:
+    - Replaced hardcoded capital ($10,000) with dynamic balance fetching from the API.
+    - Implemented a 95% usable balance threshold to prevent "Insufficient Margin" errors.
+- **Server Stabilization**:
+    - Resolved a massive CPU spike on the GCP server caused by redundant dependency installation and service crash loops.
+    - Fixed a `ModuleNotFoundError` for `eth_account` on the server by manually verifying and installing the virtual environment.
+    - Optimized `requirements.txt` for compatibility with the server's Python 3.10 environment (downgraded `contourpy`).
+- **State Synchronization**:
+    - Fixed a mismatch between the bot's internal state (`paper_balance.json`) and actual on-chain positions (APT, DYDX, GMT, etc.).
+    - Unified the Telegram notification variable names between local and server environments (`TELEGRAM_TOKEN`).
+- **Infrastructure Update**:
+    - Handled a GCP External IP change (`136.114.144.64`) by updating `.env` and GitHub Action secrets.
+    - Verified successful live trading: Confirmed real execution of ATOM, GMT, and DYDX orders on the testnet.
+
+*Status: 🟢 24/7 Live Monitoring Active on GCP.*
