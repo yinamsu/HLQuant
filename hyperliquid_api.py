@@ -161,6 +161,16 @@ class HyperliquidAPI:
             logging.error(f"Error placing order: {e}")
             return None
 
+    async def get_user_state(self):
+        """
+        지갑의 전체 상태(잔고, 포지션 등)를 조회합니다.
+        """
+        try:
+            return self.info.user_state(self.wallet_address)
+        except Exception as e:
+            logging.error(f"Error fetching user state: {e}")
+            return {}
+
     async def close(self):
         # SDK (requests 기반)은 별도의 close가 필요 없으나 구조 유지
         pass
