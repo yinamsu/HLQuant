@@ -96,11 +96,13 @@ class HyperliquidAPI:
         """
         지갑의 가용 USDC 잔고를 조회합니다.
         """
-        if not self.wallet_address: return 0.0
         try:
             user_state = self.info.user_state(self.wallet_address)
-            # 선물 계정의 가용 잔고(withdrawable) 반환
-            return float(user_state.get('withdrawable', 0))
+            # 'cash'가 없으면 'withdrawable' 또는 'marginSummary'의 'accountValue' 사용
+            cash = user_state.get('cash')
+            if cash is None:
+                cash = user_state.get('marginSummary', {}).get('accountValue', 0.0)
+            return float(cash)
         except Exception as e:
             logging.error(f"Error fetching balance: {e}")
             return 0.0

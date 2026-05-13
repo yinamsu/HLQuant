@@ -13,7 +13,7 @@ class DeltaNeutralStrategy:
         self.api = api
         self.is_real_trading = is_real_trading
         self.initial_capital = 1000.0  # 가상 원금 $1,000 (Paper Trading용)
-        self.max_positions = 3
+        self.max_positions = 5
         state = self._load_state()
         self.positions = state.get("positions", {})
         self.total_realized_profit = state.get("total_realized_profit", 0.0)
