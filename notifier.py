@@ -178,11 +178,11 @@ class TelegramNotifier:
             with open(log_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 recent_lines = lines[-num_lines:]
-                log_text = "".join(recent_lines)
-                if len(log_text) > 3000:
-                    log_text = log_text[-3000:]
+                # 로그 내용에서 백틱(`) 등 마크다운 특수문자 제거 및 코드블록 감싸기
+                log_text = "".join(recent_lines).replace("`", "'")
+                if len(log_text) > 3500:
+                    log_text = log_text[-3500:]
                 
-                # 특수문자 충돌 방지를 위해 Markdown 기호 제거 혹은 단순화
-                return f"📝 *[Latest Server Logs]*\n\n{log_text}"
+                return f"📝 *[Latest Server Logs]*\n\n```\n{log_text}\n```"
         except Exception as e:
             return f"⚠️ 로그 읽기 오류: {e}"
