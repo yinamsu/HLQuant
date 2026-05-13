@@ -180,6 +180,15 @@ class DeltaNeutralStrategy:
         """
         current_time = datetime.now()
         
+        # 실제 거래 시 가용 잔고에 따라 최대 포지션 수 동적 조절 ($10 제한 대비)
+        if self.is_real_trading and self.api:
+            actual_balance = await self.api.get_balance()
+            # 최소 $11 할당 기준 (슬리피지 고려)
+            dynamic_max = max(1, int(actual_balance // 11))
+            if dynamic_max < self.max_positions:
+                logging.info(f"Adjusting max_positions from {self.max_positions} to {dynamic_max} due to balance (${actual_balance:.2f})")
+                self.max_positions = dynamic_max
+
         # 1. 기존 포지션 수익 업데이트 및 청산 판단
         symbols_to_exit = []
         for symbol, pos in list(self.positions.items()):
@@ -194,8 +203,8 @@ class DeltaNeutralStrategy:
             last_update = datetime.fromisoformat(pos.get('last_update', pos['entry_time']))
             elapsed_seconds = (current_time - last_update).total_seconds()
             
-            # 펀딩비 수익 누적 (1시간당 funding_rate만큼 수익 발생 가정)
-            size_per_pos = self.initial_capital / self.max_positions
+            # 펀딩비 수익 누적
+            size_per_pos = (actual_balance / self.max_positions) if (self.is_real_trading and 'actual_balance' in locals()) else (self.initial_capital / self.max_positions)
             funding_profit = size_per_pos * curr_funding * (elapsed_seconds / 3600)
             pos['profit'] = pos.get('profit', 0.0) + funding_profit
             pos['last_update'] = current_time.isoformat()
@@ -219,19 +228,18 @@ class DeltaNeutralStrategy:
                 curr_spot_px = spot_data.get(symbol, {}).get('midPrice', p_data['indexPrice'])
                 curr_perp_px = p_data['midPrice']
                 
-                # Spot PnL = (Close - Open) / Open
-                # Perp PnL = (Open - Close) / Open (Short position)
                 spot_pnl_pct = (curr_spot_px - pos['spot_px']) / pos['spot_px']
                 perp_pnl_pct = (pos['perp_px'] - curr_perp_px) / pos['perp_px']
                 price_diff_profit = size_per_pos * (spot_pnl_pct + perp_pnl_pct)
                 
                 final_pos_profit = pos['profit'] + price_diff_profit
                 
-                # --- 실전 청산 로직 (Testnet/Mainnet) ---
+                # --- 실전 청산 로직 ---
                 if self.is_real_trading and self.api:
                     try:
-                        # 1. 선물 숏 포지션 청산 (Buy to close)
-                        size_amount = (self.initial_capital / self.max_positions) / pos['perp_px']
+                        # 포지션 크기 재계산 (현재가 기준)
+                        size_amount = size_per_pos / curr_perp_px
+                        
                         r1 = await self.api.place_order(symbol, size_amount, curr_perp_px * 1.01, True, is_perp=True)
                         
                         spot_name = spot_data.get(symbol, {}).get('spot_name')
@@ -239,21 +247,19 @@ class DeltaNeutralStrategy:
                             logging.error(f"Cannot find spot name for exit {symbol}")
                             continue
                             
-                        # 2. 현물 매수 포지션 청산 (Sell to close)
                         r2 = await self.api.place_order(spot_name, size_amount, curr_spot_px * 0.99, False, is_perp=False)
                         
                         if not r1 or not r2:
-                            logging.error(f"Real exit failed for {symbol}. Keeping position.")
-                            continue # 실제 청산 실패 시 가상 청산 건너뛰기
+                            logging.error(f"Real exit failed for {symbol}. Keeping position state.")
+                            continue
                             
-                        logging.info(f"[REAL EXIT] {symbol} execution triggered.")
+                        logging.info(f"[REAL EXIT] {symbol} execution successful.")
                     except Exception as e:
                         logging.error(f"Real exit failed for {symbol}: {e}")
                         continue
-                # ------------------------------------
+                # --------------------
 
                 self.total_realized_profit += final_pos_profit
-                
                 logging.info(f"[VIRTUAL EXIT] {symbol} | Profit: ${final_pos_profit:.2f} | Reason: {exit_reason}")
                 await self.notifier.send_exit_notification(symbol, f"{exit_reason} (Final Profit: ${final_pos_profit:.2f})")
                 symbols_to_exit.append(symbol)
@@ -272,68 +278,62 @@ class DeltaNeutralStrategy:
                     virtual_spot_buy_px = t['spot_px'] * (1 + self.slippage_rate)
                     virtual_perp_sell_px = t['perp_px'] * (1 - self.slippage_rate)
                     
+                    # --- 실전 진입 로직 ---
+                    if self.is_real_trading and self.api:
+                        try:
+                            # [사전 검증 1] 현물 심볼 존재 여부
+                            spot_name = spot_data.get(t['symbol'], {}).get('spot_name')
+                            if not spot_name:
+                                logging.error(f"[PRE-CHECK FAIL] No spot market for {t['symbol']} on this network")
+                                continue
+                            
+                            actual_balance = await self.api.get_balance()
+                            usable_balance = actual_balance * 0.95
+                            size_usd = usable_balance / self.max_positions
+                            
+                            # [사전 검증 2] 최소 주문 금액($10) 체크
+                            if size_usd < 10.1:
+                                logging.warning(f"Skipping {t['symbol']} - Size ${size_usd:.2f} too small for $10 limit.")
+                                continue
+                                
+                            perp_amount = size_usd / t['perp_px']
+                            
+                            # [사전 검증 3] 수량 정밀도 체크 (제로 사이즈 방지)
+                            if perp_amount <= 0:
+                                logging.warning(f"Skipping {t['symbol']} - Calculated size is zero.")
+                                continue
+
+                            # 1. 선물 숏 진입
+                            r1 = await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False, is_perp=True)
+                            
+                            # 2. 현물 롱 진입
+                            r2 = await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px, True, is_perp=False)
+                            
+                            if not r1 or not r2:
+                                logging.error(f"Real entry failed for {t['symbol']}. Rolling back.")
+                                if r1: await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px * 1.05, True, is_perp=True)
+                                if r2: await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px * 0.95, False, is_perp=False)
+                                await self.notifier.send_message(f"⚠️ *[ENTRY FAILED]*\n• {t['symbol']} 진입 실패")
+                                continue
+                                
+                            logging.info(f"[REAL ENTRY] {t['symbol']} successful with size ${size_usd:.2f}")
+                        except Exception as e:
+                            logging.error(f"Real entry failed for {t['symbol']}: {e}")
+                            continue
+                    # --------------------
+
                     self.positions[t['symbol']] = {
                         'entry_time': current_time.isoformat(),
                         'last_update': current_time.isoformat(),
                         'spot_px': virtual_spot_buy_px,
                         'perp_px': virtual_perp_sell_px,
                         'entry_apy': t['apy'],
-                        'profit': 0.0  # 펀딩비 수익 누적용
+                        'profit': 0.0
                     }
-
-                    # --- 실전 진입 로직 (Testnet/Mainnet) ---
-                    if self.is_real_trading and self.api:
-                        try:
-                            # [사전 검증 1] 현물 심볼 존재 여부를 가장 먼저 확인 - 없으면 선물도 넣지 않음
-                            spot_name = spot_data.get(t['symbol'], {}).get('spot_name')
-                            if not spot_name:
-                                logging.error(f"[PRE-CHECK FAIL] No spot market for {t['symbol']} on this network — skipping entry")
-                                del self.positions[t['symbol']]
-                                continue
-                            
-                            # [사전 검증 2] 실제 잔고 조회
-                            actual_balance = await self.api.get_balance()
-                            if actual_balance < 5:
-                                logging.error("Insufficient balance for real trading.")
-                                del self.positions[t['symbol']]
-                                continue
-                            
-                            # 가용 자산의 95%만 사용하여 여유분 확보 (슬리피지 대비)
-                            usable_balance = actual_balance * 0.95
-                            size_usd = usable_balance / self.max_positions
-                            perp_amount = size_usd / t['perp_px']
-                            
-                            # 1. 선물 숏 진입 (Sell)
-                            r1 = await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False, is_perp=True)
-                            
-
-                            # 2. 현물 롱 진입 (Buy)
-                            r2 = await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px, True, is_perp=False)
-                            
-                            if not r1 or not r2:
-                                logging.error(f"Real entry failed for {t['symbol']}. Reverting virtual entry.")
-                                
-                                if r1 and not r2:
-                                    logging.warning(f"Closing orphaned Perp position for {t['symbol']}")
-                                    await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px * 1.05, True, is_perp=True)
-                                    
-                                if r2 and not r1:
-                                    logging.warning(f"Closing orphaned Spot position for {t['symbol']}")
-                                    await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px * 0.95, False, is_perp=False)
-                                    
-                                del self.positions[t['symbol']]
-                                await self.notifier.send_message(f"⚠️ *[ENTRY FAILED]*\n• {t['symbol']} 진입 실패 (IOC 체결 안됨 또는 롤백)")
-                                continue
-                                
-                            logging.info(f"[REAL ENTRY] {t['symbol']} execution triggered with size ${size_usd:.2f}")
-                        except Exception as e:
-                            logging.error(f"Real entry failed for {t['symbol']}: {e}")
-                            del self.positions[t['symbol']]
-                            continue
-                    # ------------------------------------
-
-                    logging.info(f"[VIRTUAL ENTRY] {t['symbol']} | APY: {t['apy']:.2f}%")
+                    logging.info(f"[ENTRY] {t['symbol']} | APY: {t['apy']:.2f}%")
                     await self.notifier.send_entry_notification(t['symbol'], t['apy'], virtual_spot_buy_px, virtual_perp_sell_px)
+
+        self._save_state()
 
         self._save_state()
 
