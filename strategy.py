@@ -169,9 +169,9 @@ class DeltaNeutralStrategy:
         top_list = ", ".join([f"{s}(APY:{a:.1f}%, Prem:{p:.2f}%)" for s, a, p in all_candidates[:5]])
         logging.info(f"Market Top: {top_list}")
 
-        # APY 기준 내림차순 정렬 후 상위 3개 선정
+        # APY 기준 내림차순 정렬 후 상위 max_positions개 선정
         candidates.sort(key=lambda x: x['apy'], reverse=True)
-        return candidates[:3]
+        return candidates[:self.max_positions]
 
     async def execute_logic(self, perp_data, spot_data):
         """
@@ -319,6 +319,7 @@ class DeltaNeutralStrategy:
                                     await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px * 0.95, False, is_perp=False)
                                     
                                 del self.positions[t['symbol']]
+                                await self.notifier.send_message(f"⚠️ *[ENTRY FAILED]*\n• {t['symbol']} 진입 실패 (IOC 체결 안됨 또는 롤백)")
                                 continue
                                 
                             logging.info(f"[REAL ENTRY] {t['symbol']} execution triggered with size ${size_usd:.2f}")
