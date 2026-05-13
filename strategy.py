@@ -134,15 +134,20 @@ class DeltaNeutralStrategy:
     def get_targets(self, perp_data, spot_data):
         """
         진입 후보 종목 스캔 및 필터링
+        현물 시장이 존재하는 종목만 대상으로 합니다.
         """
         candidates = []
         for symbol, p_data in perp_data.items():
-            # 1. APY 계산
+            # 1. 현물 시장 존재 여부 확인
+            s_data = spot_data.get(symbol)
+            if not s_data:
+                continue
+                
+            # 2. APY 계산
             apy = self.calculate_apy(p_data['funding'])
             
-            # 2. 프리미엄(Basis) 계산
-            # 현물 데이터가 없으면 오라클 가격(indexPrice)을 대용으로 사용
-            spot_px = spot_data.get(symbol, {}).get('midPrice', p_data['indexPrice'])
+            # 3. 프리미엄(Basis) 계산
+            spot_px = s_data['midPrice']
             if spot_px == 0: continue
             
             perp_px = p_data['midPrice']
@@ -158,16 +163,20 @@ class DeltaNeutralStrategy:
                     'perp_px': perp_px
                 })
         
-        # 디버깅: 현재 시장의 상위 5개 APY 및 프리미엄 출력
+        # 디버깅: 현재 시장의 상위 5개 APY 및 프리미엄 출력 (현물 있는 것만)
         all_candidates = []
         for symbol, p_data in perp_data.items():
             apy = self.calculate_apy(p_data['funding'])
-            spot_px = spot_data.get(symbol, {}).get('midPrice', p_data['indexPrice'])
-            premium = abs(p_data['midPrice'] - spot_px) / spot_px * 100 if spot_px != 0 else 999
+            s_data = spot_data.get(symbol)
+            if s_data:
+                spot_px = s_data['midPrice']
+                premium = abs(p_data['midPrice'] - spot_px) / spot_px * 100 if spot_px != 0 else 999
+            else:
+                premium = 999 # 현물 없음
             all_candidates.append((symbol, apy, premium))
         
         all_candidates.sort(key=lambda x: x[1], reverse=True)
-        top_list = ", ".join([f"{s}(APY:{a:.1f}%, Prem:{p:.2f}%)" for s, a, p in all_candidates[:5]])
+        top_list = ", ".join([f"{s}(APY:{a:.1f}%, Prem:{'N/A' if p==999 else f'{p:.2f}%'})" for s, a, p in all_candidates[:5]])
         logging.info(f"Market Top: {top_list}")
 
         # APY 기준 내림차순 정렬 후 상위 max_positions개 선정

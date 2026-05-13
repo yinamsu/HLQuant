@@ -138,3 +138,14 @@
 - **Success**: Verified that the bot now correctly identifies `ETH` and `SOL` spot markets and attempts entry with properly sized orders above the $10 threshold.
 
 *Status: 🟢 24/7 Live Monitoring Active on GCP. Mainnet Spot mapping and $10 limit issues resolved. 봇은 이제 BTC/ETH 등 주요 자산의 메인넷 현물 시장을 완벽하게 인식하며, 잔고에 맞춰 주문 크기를 자동으로 조절합니다.* 🚀
+
+### Spot Market Coverage & Error Log Cleanup
+- **Robust Spot Mapping Strategy**:
+    - **Optimization**: Updated `HyperliquidAPI.get_all_spot_data()` to utilize `spot_mapping.json` for precise ID-based mapping (`@249` for BTC, `@250` for ETH, etc.).
+    - **Fallback Logic**: Implemented multi-tier matching (Mapping File → Precise Name/FullName → Price Fuzzy Matching) to maximize coverage across different assets.
+- **Target Scan Filtering**:
+    - **Logic Change**: Modified `DeltaNeutralStrategy.get_targets()` to **exclude** any perpetual asset that does not have a corresponding spot market in the current environment.
+    - **Result**: Completely eliminated `[PRE-CHECK FAIL]` error logs for assets like DYDX, ARB, and LTC that lack spot pairs on Hyperliquid Mainnet.
+    - **Reliability**: The bot now only evaluates and logs legitimate arbitrage opportunities, significantly reducing log noise and improving monitoring clarity.
+
+*Status: 🟢 🟢 Mainnet Ready. Spot mapping logic is now robust across all major assets, and log noise has been minimized by intelligent filtering. 봇은 이제 현물 마켓이 있는 종목만 정밀하게 타겟팅하여 안정적으로 운용됩니다.* 🚀
