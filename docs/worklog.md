@@ -125,3 +125,11 @@
     - Implemented correct two-step lookup: `universe[i].tokens[0]` → match in `tokens[]` by `index` → read `szDecimals`.
 
 *Status: 🟢 24/7 Live Monitoring Active on GCP. Testnet naked-short positions manually cleared. Codebase hardened against all known failure modes.*
+
+### Mainnet Transition & Final Wrap-up
+- **Mainnet Deployment**: Successfully transitioned from Testnet to Mainnet by updating the `IS_TESTNET=False` flag and pushing to GitHub to trigger automatic deployment via GitHub Actions. Fixed Telegram status messages to properly display "🟢 Mainnet Real Trading".
+- **Mainnet Spot Limitation Discovered**: After successful deployment, monitoring logs revealed that major altcoins (ETH, DYDX, AVAX, BNB, LTC, etc.) are correctly skipping entry because there are **no spot markets for these assets on Hyperliquid Mainnet**. Hyperliquid's spot market is primarily restricted to its native ecosystem tokens (like PURR). 
+- **System Integrity Confirmed**: The Naked Short Prevention pre-check (implemented in the previous session) is successfully blocking these un-hedgeable trades. The bot is fully operational, mathematically sound, and waiting for valid APY targets on natively supported spot tokens.
+- **Completion**: All outstanding tasks from the previous session have been completed and verified. 🟢
+ 
+ 
