@@ -63,8 +63,8 @@ class HyperliquidAPI:
     async def get_all_spot_data(self):
         """
         모든 현물(Spot) 자산의 데이터를 가져옵니다. 
-        @1, @2 등의 Alias를 실제 토큰 기호(BTC, ETH, HYPE 등)와 1:1로 매핑하여 반환합니다.
-        메인넷의 'UBTC', 'UETH' 등 Unit 자산들도 표준 기호로 정규화하여 매핑합니다.
+        이름 매핑이 실패할 경우, 선물 가격과 현물 가격을 실시간으로 대조하여 
+        가장 오차가 적은 현물 자산을 자동으로 매칭합니다 (Fuzzy Price Matching).
         """
         try:
             # 1. 현물 메타데이터 및 시세 데이터 가져오기
@@ -74,39 +74,60 @@ class HyperliquidAPI:
             meta, asset_ctxs = result
             tokens = meta['tokens']
             universe = meta['universe']
+            token_map = {t['index']: t['name'] for t in tokens}
             
-            # 2. 토큰 인덱스 -> 이름 매핑 사전 생성 (정규화 포함)
-            token_map = {}
-            for t in tokens:
-                name = t['name']
-                # 정규화: UBTC -> BTC, UETH -> ETH, USOL -> SOL 등 (Unit 자산 대응)
-                normalized_name = name
-                if name.startswith('U') and len(name) > 1 and name[1:] in ['BTC', 'ETH', 'SOL', 'AVAX', 'MATIC', 'DOT', 'ARB', 'OP']:
-                    normalized_name = name[1:]
-                
-                token_map[t['index']] = normalized_name
+            # 2. 선물 데이터 가져오기 (가격 대조용)
+            perp_meta, perp_asset_ctxs = self.info.meta_and_asset_ctxs()
+            perp_universe = perp_meta['universe']
+            perp_prices = {}
+            for i, p_asset in enumerate(perp_universe):
+                p_price = float(perp_asset_ctxs[i].get('midPx') or 0)
+                if p_price > 0:
+                    perp_prices[p_asset['name']] = p_price
             
             spot_data = {}
             
-            # 3. 유니버스(페어)를 순회하며 실제 이름과 매핑
+            # 3. 각 선물 종목에 대해 가장 적합한 현물 시장 찾기
+            for p_symbol, p_price in perp_prices.items():
+                best_match_idx = -1
+                min_diff = 0.005 # 0.5% 오차 이내만 허용
+                
+                for j, s_ctx in enumerate(asset_ctxs):
+                    if j >= len(universe): break
+                    s_price = float(s_ctx.get('midPx') or 0)
+                    if s_price <= 0: continue
+                    
+                    diff = abs(p_price - s_price) / p_price
+                    if diff < min_diff:
+                        min_diff = diff
+                        best_match_idx = j
+                
+                if best_match_idx != -1:
+                    s_pair = universe[best_match_idx]
+                    s_ctx = asset_ctxs[best_match_idx]
+                    
+                    spot_data[p_symbol] = {
+                        'midPrice': float(s_ctx.get('midPx') or 0),
+                        'spot_name': s_pair['name'],
+                        'universe_index': best_match_idx,
+                        'match_diff': min_diff * 100
+                    }
+            
+            # 4. 특수 예외 보완: PURR 등 이름 기반 매칭이 확실한 경우 우선권 부여
             for i, pair in enumerate(universe):
                 token_indices = pair.get('tokens', [])
                 if not token_indices: continue
-                
-                base_token_idx = token_indices[0]
-                symbol = token_map.get(base_token_idx)
-                
-                if symbol:
-                    ctx = asset_ctxs[i]
-                    spot_data[symbol] = {
-                        'midPrice': float(ctx.get('midPx') or 0),
-                        'spot_name': pair['name'],  # 실제 주문에 사용할 이름 (예: '@107' 또는 'PURR/USDC')
+                base_name = token_map.get(token_indices[0])
+                if base_name and base_name in ['PURR', 'HYPE', 'HPL', 'VIRTUAL']:
+                    spot_data[base_name] = {
+                        'midPrice': float(asset_ctxs[i].get('midPx') or 0),
+                        'spot_name': pair['name'],
                         'universe_index': i
                     }
                     
             return spot_data
         except Exception as e:
-            logging.error(f"Error fetching universal spot mapping: {e}")
+            logging.error(f"Error fetching fuzzy price-based spot mapping: {e}")
             return None
 
     async def get_balance(self):
