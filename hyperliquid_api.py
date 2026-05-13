@@ -124,16 +124,27 @@ class HyperliquidAPI:
             # 자산별 정밀도(szDecimals, pxDecimals) 가져오기
             if is_perp:
                 meta, _ = self.info.meta_and_asset_ctxs()
+                universe = meta['universe']
+                sz_decimals = 0
+                px_decimals = 6
+                for asset in universe:
+                    if asset['name'] == symbol:
+                        sz_decimals = asset.get('szDecimals', 0)
+                        break
             else:
                 meta, _ = self.info.spot_meta_and_asset_ctxs()
-                
-            universe = meta['universe']
-            sz_decimals = 0
-            px_decimals = 6
-            for asset in universe:
-                if asset['name'] == symbol:
-                    sz_decimals = asset['szDecimals']
-                    break
+                universe = meta['universe']
+                tokens = meta['tokens']
+                sz_decimals = 0
+                px_decimals = 6
+                for asset in universe:
+                    if asset['name'] == symbol:
+                        base_token_idx = asset.get('tokens', [0])[0]
+                        for token in tokens:
+                            if token['index'] == base_token_idx:
+                                sz_decimals = token.get('szDecimals', 0)
+                                break
+                        break
             
             # 수량 및 가격 정밀도 조정
             rounded_size = round(float(size), sz_decimals)
@@ -156,6 +167,15 @@ class HyperliquidAPI:
                 for status in statuses:
                     if 'error' in status:
                         logging.error(f"Order rejected by exchange: {status['error']}")
+                        return None
+                        
+                    if 'filled' in status:
+                        filled_sz = float(status['filled'].get('totalSz', 0))
+                        if filled_sz == 0:
+                            logging.error("IOC order filled 0 (Canceled due to slippage/spread)")
+                            return None
+                    elif 'canceled' in status:
+                        logging.error("IOC order was canceled immediately")
                         return None
                         
                 logging.info(f"Order successful: {response}")

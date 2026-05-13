@@ -20,7 +20,7 @@ class DeltaNeutralStrategy:
         self.notifier = notifier or TelegramNotifier()
         
         self.min_hold_hours = 8
-        self.slippage_rate = 0.0005  # 0.05%
+        self.slippage_rate = 0.01  # 1.0% (Testnet adjusted)
         self.entry_apy_threshold = 3.0
         self.exit_apy_threshold = 1.0
         self.rebalance_gap = 10.0  # 타 종목 APY가 10% 이상 높을 때
@@ -309,6 +309,15 @@ class DeltaNeutralStrategy:
                             
                             if not r1 or not r2:
                                 logging.error(f"Real entry failed for {t['symbol']}. Reverting virtual entry.")
+                                
+                                if r1 and not r2:
+                                    logging.warning(f"Closing orphaned Perp position for {t['symbol']}")
+                                    await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px * 1.05, True, is_perp=True)
+                                    
+                                if r2 and not r1:
+                                    logging.warning(f"Closing orphaned Spot position for {t['symbol']}")
+                                    await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px * 0.95, False, is_perp=False)
+                                    
                                 del self.positions[t['symbol']]
                                 continue
                                 

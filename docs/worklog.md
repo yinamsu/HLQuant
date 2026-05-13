@@ -94,4 +94,9 @@
     - Changed all limit orders (`tif: "Gtc"`) to Immediate Or Cancel (`tif: "Ioc"`) to prevent unfillable limit orders from resting in the order book and spamming the bot's state.
     - Added rigorous error checking inside the `response.get('data').get('statuses')` array to catch internal exchange rejections (e.g., Margin errors) that previously returned a superficial `'ok'` status.
 
+- **Delta-Neutral Integrity & Testnet Slippage Optimization**:
+    - Increased `slippage_rate` from 0.05% to 1.0% to accommodate wide spreads in the testnet Spot market, preventing valid IOC orders from bouncing.
+    - Implemented a rigorous "Orphaned Position Rollback" logic in `strategy.py`: If one leg (e.g., Perp) successfully fills but the other leg (e.g., Spot) fails, the bot immediately executes a market-like order to close the orphaned position, preventing naked directional exposure.
+    - Enhanced IOC fill validation in `hyperliquid_api.py` to check for `filled` with `totalSz > 0` or `canceled` status, properly rejecting 0-fill orders that previously returned a superficial `'ok'`.
+
 *Status: 🟢 24/7 Live Monitoring Active on GCP.*
