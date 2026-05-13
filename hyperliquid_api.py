@@ -118,15 +118,34 @@ class HyperliquidAPI:
             # 여기서는 편의상 Limit Order로 전송 (slippage 고려된 가격)
             # is_perp가 False이면 Spot 주문 처리 로직 필요 (SDK 확인 필요)
             
-            logging.info(f"Placing {'Buy' if is_buy else 'Sell'} order for {symbol}: {size} @ {price}")
+            # 자산별 정밀도(szDecimals, pxDecimals) 가져오기
+            meta, _ = self.info.meta_and_asset_ctxs()
+            universe = meta['universe']
+            sz_decimals = 0
+            px_decimals = 0
+            for asset in universe:
+                if asset['name'] == symbol:
+                    sz_decimals = asset['szDecimals']
+                    # pxDecimals는 개별 에셋의 속성으로 존재하지 않을 수 있으므로 
+                    # 기본 6자리 또는 특정 로직 필요 (보통 6자리이나 종목별로 다름)
+                    # 실제 SDK에서는 정밀도를 알아내기 위해 다른 필드를 사용하거나 
+                    # 고정된 규칙(Significant Figures)을 따르는 경우가 많음.
+                    # 여기서는 안전하게 6자리로 하되, 오류 방지를 위해 정수 변환 로직 확인.
+                    px_decimals = 6 # 기본값
+                    break
             
-            # SDK: order(coin, is_buy, size, price, order_type, ...)
-            # order_type {'limit': {'tif': 'Gtc'}}
+            # 수량 및 가격 정밀도 조정
+            rounded_size = round(float(size), sz_decimals)
+            # Hyperliquid은 가격에 대해 유효숫자 5자리를 요구하는 경우가 많음
+            rounded_price = float(f"{float(price):.5g}") 
+            
+            logging.info(f"Placing {'Buy' if is_buy else 'Sell'} order for {symbol}: {rounded_size} @ {rounded_price}")
+            
             response = self.exchange.order(
                 symbol, 
                 is_buy, 
-                size, 
-                price, 
+                rounded_size, 
+                rounded_price, 
                 {"limit": {"tif": "Gtc"}}
             )
             

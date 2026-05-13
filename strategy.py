@@ -12,7 +12,7 @@ class DeltaNeutralStrategy:
         self.state_file = state_file
         self.api = api
         self.is_real_trading = is_real_trading
-        self.initial_capital = 10000.0  # 가상 원금 $10,000 (Paper Trading용)
+        self.initial_capital = 1000.0  # 가상 원금 $1,000 (Paper Trading용)
         self.max_positions = 3
         state = self._load_state()
         self.positions = state.get("positions", {})
@@ -241,13 +241,22 @@ class DeltaNeutralStrategy:
                     # --- 실전 진입 로직 (Testnet/Mainnet) ---
                     if self.is_real_trading and self.api:
                         try:
-                            size_usd = self.initial_capital / self.max_positions
+                            # 실제 잔고 조회
+                            actual_balance = await self.api.get_balance()
+                            if actual_balance < 10:
+                                logging.error("Insufficient balance for real trading.")
+                                continue
+                            
+                            # 가용 자산의 95%만 사용하여 여유분 확보 (슬리피지 대비)
+                            usable_balance = actual_balance * 0.95
+                            size_usd = usable_balance / self.max_positions
                             perp_amount = size_usd / t['perp_px']
+                            
                             # 1. 선물 숏 진입 (Sell)
                             await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False)
                             # 2. 현물 롱 진입 (Buy)
                             await self.api.place_order(t['symbol'], perp_amount, virtual_spot_buy_px, True)
-                            logging.info(f"[REAL ENTRY] {t['symbol']} execution triggered.")
+                            logging.info(f"[REAL ENTRY] {t['symbol']} execution triggered with size ${size_usd:.2f}")
                         except Exception as e:
                             logging.error(f"Real entry failed for {t['symbol']}: {e}")
                     # ------------------------------------

@@ -30,7 +30,7 @@ async def telegram_worker(notifier):
 async def main():
     # --- 모드 설정 ---
     IS_TESTNET = True          # 테스트넷 사용 여부
-    IS_REAL_TRADING = False    # 실전 주문 전송 여부 (True로 하면 실제 주문이 나감)
+    IS_REAL_TRADING = True     # 실전 주문 전송 여부 (True로 하면 실제 주문이 나감)
     # ----------------
     
     mode_str = "Testnet Real Trading" if IS_REAL_TRADING and IS_TESTNET else "Paper Trading"
