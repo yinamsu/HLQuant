@@ -99,4 +99,29 @@
     - Implemented a rigorous "Orphaned Position Rollback" logic in `strategy.py`: If one leg (e.g., Perp) successfully fills but the other leg (e.g., Spot) fails, the bot immediately executes a market-like order to close the orphaned position, preventing naked directional exposure.
     - Enhanced IOC fill validation in `hyperliquid_api.py` to check for `filled` with `totalSz > 0` or `canceled` status, properly rejecting 0-fill orders that previously returned a superficial `'ok'`.
 
-*Status: 🟢 24/7 Live Monitoring Active on GCP.*
+- **`/balance` Command Overhaul**:
+    - Discovered `/balance` was reporting a fabricated virtual ledger value ($1,000.99) instead of the actual exchange balance (~$893).
+    - Refactored `get_balance_summary()` to `async` and added live API call to fetch real `marginSummary.accountValue` when in `is_real_trading` mode.
+    - Added Spot USDC balance aggregation (Perp equity + Spot USDC) for complete portfolio visibility.
+    - Fixed a missing `import asyncio` in `notifier.py` that caused `/balance` to crash with `NameError`.
+
+- **Spot Balance Visibility Fix**:
+    - `get_balance()` only checked the Perp margin account; funds in the Spot USDC wallet were invisible to the bot, causing "Insufficient balance" errors when ~$893 USDC was available in spot.
+    - Added fallback: if Perp margin balance < $1, query `spot_user_state()` and use the USDC token balance.
+
+- **Candidate Scan Expansion**:
+    - `get_targets()` was hardcoded to return only the top 3 candidates, silently skipping entries when multiple slots were open simultaneously.
+    - Changed to `candidates[:self.max_positions]` so all 10 slots can be evaluated in a single scan cycle.
+    - Added `⚠️ [ENTRY FAILED]` Telegram alert so IOC failures are never silent.
+
+- **CRITICAL: Naked Short Prevention (Pre-Check Fix)**:
+    - **Root Cause**: The testnet Spot market only has test tokens (PURR, etc.) — real assets like GMT, APT, DYDX have no spot listing. The `spot_name` lookup was performed *after* the Perp short was already placed, resulting in naked directional exposure with no hedge.
+    - **Fix**: Moved `spot_name` existence check to the **very top** of the entry block, *before* any orders are sent. If no spot market exists for the symbol, the entire entry is aborted and no orders are placed.
+    - **Manual Cleanup**: 3 orphaned naked short positions (GMT, APT, DYDX) were manually closed via the exchange UI.
+    - **Lesson Learned**: Testnet is not suitable for full delta-neutral strategy validation; real-asset spot markets do not exist there. Full testing requires mainnet.
+
+- **`szDecimals` Spot Lookup Fix**:
+    - Fixed `KeyError: 'szDecimals'` crash on spot orders. The Spot universe stores `szDecimals` inside `tokens[]` (indexed by `token.index`), not directly on the universe asset object as in Perp.
+    - Implemented correct two-step lookup: `universe[i].tokens[0]` → match in `tokens[]` by `index` → read `szDecimals`.
+
+*Status: 🟢 24/7 Live Monitoring Active on GCP. Testnet naked-short positions manually cleared. Codebase hardened against all known failure modes.*
