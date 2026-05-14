@@ -71,27 +71,13 @@ class HyperliquidAPI:
                 pair_name = pair['name']
                 raw_symbol = base_token['name']
                 
-                # A. 매핑 파일(ID)에 있는지 확인
+                # 오직 매핑 파일(ID)에 있는 코인만 취급 (안전 제일)
                 symbol = id_to_symbol.get(pair_name)
-                
-                # B. 매핑에 없으면 자동 규칙 적용
-                if not symbol:
-                    # 'U' 접두어 처리 (예: UETH -> ETH)
-                    if raw_symbol.startswith('U') and len(raw_symbol) > 3:
-                        potential_symbol = raw_symbol[1:]
-                        # 만약 진짜 ETH(@250)가 매핑에 따로 있다면, UETH(@151)가 ETH를 가로채지 못하게 함
-                        if potential_symbol not in id_to_symbol.values():
-                            symbol = potential_symbol
-                    elif raw_symbol == 'AVAX0':
-                        symbol = 'AVAX'
-                    else:
-                        symbol = raw_symbol
                 
                 if not symbol: continue
 
                 mid_px = float(asset_ctxs[i].get('midPx') or 0)
-                # 이미 더 정확한 매핑(ID 기반)으로 채워졌거나, 가격이 0이면 건너뜀
-                if mid_px > 0 and symbol not in spot_data:
+                if mid_px > 0:
                     spot_data[symbol] = {
                         'midPrice': mid_px,
                         'spot_name': pair_name,
