@@ -51,12 +51,14 @@ class HyperliquidAPI:
             if not result: return None
             meta, asset_ctxs = result
             token_map = {t['index']: t for t in meta['tokens']}
-            # spot_mapping.json 로드
-            mapping = {}
+            # 1. 매핑 정보를 역으로 정리 (ID -> Symbol)
+            id_to_symbol = {}
             if os.path.exists("spot_mapping.json"):
                 try:
                     with open("spot_mapping.json", "r") as f:
-                        mapping = json.load(f)
+                        mapping_data = json.load(f)
+                        for sym, m_id in mapping_data.items():
+                            id_to_symbol[m_id] = sym
                 except: pass
 
             spot_data = {}
@@ -66,27 +68,33 @@ class HyperliquidAPI:
                 base_token = token_map.get(token_indices[0])
                 if not base_token: continue
                 
-                raw_symbol = base_token['name']
                 pair_name = pair['name']
+                raw_symbol = base_token['name']
                 
-                # 1. 매핑 파일 우선 확인
-                symbol = None
-                for s, m_name in mapping.items():
-                    if m_name == pair_name:
-                        symbol = s
-                        break
+                # A. 매핑 파일(ID)에 있는지 확인
+                symbol = id_to_symbol.get(pair_name)
                 
-                # 2. 매핑 없으면 기존 로직 적용
+                # B. 매핑에 없으면 자동 규칙 적용
                 if not symbol:
-                    symbol = raw_symbol
-                    if raw_symbol.startswith('U') and len(raw_symbol) > 3: symbol = raw_symbol[1:]
-                    elif raw_symbol == 'AVAX0': symbol = 'AVAX'
+                    # 'U' 접두어 처리 (예: UETH -> ETH)
+                    if raw_symbol.startswith('U') and len(raw_symbol) > 3:
+                        potential_symbol = raw_symbol[1:]
+                        # 만약 진짜 ETH(@250)가 매핑에 따로 있다면, UETH(@151)가 ETH를 가로채지 못하게 함
+                        if potential_symbol not in id_to_symbol.values():
+                            symbol = potential_symbol
+                    elif raw_symbol == 'AVAX0':
+                        symbol = 'AVAX'
+                    else:
+                        symbol = raw_symbol
                 
+                if not symbol: continue
+
                 mid_px = float(asset_ctxs[i].get('midPx') or 0)
+                # 이미 더 정확한 매핑(ID 기반)으로 채워졌거나, 가격이 0이면 건너뜀
                 if mid_px > 0 and symbol not in spot_data:
                     spot_data[symbol] = {
                         'midPrice': mid_px,
-                        'spot_name': pair['name'],
+                        'spot_name': pair_name,
                         'szDecimals': base_token['szDecimals']
                     }
             return spot_data
