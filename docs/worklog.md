@@ -67,7 +67,22 @@
     - Implemented a command listener loop in `main.py` (checks every 5 seconds).
     - Updated `requirements.txt` with `psutil`.
 
+---
 ## 2026-05-13
+### Monitoring & Analysis
+- Downloaded and analyzed latest server logs.
+- Confirmed rebalancing events:
+    - Exited XMR, APT, AVAX.
+    - Entered VINE (23.91% APY), GMT, AVAX.
+- Verified 8-hour minimum hold time logic.
+
+### Feature Enhancement: Real-time Profit Tracking
+- Implemented `profit` accumulation engine in `DeltaNeutralStrategy`.
+- Added `total_realized_profit` to state persistence.
+- Calculated incremental funding fees every 60 seconds.
+- Integrated basis convergence into PnL calculation.
+- Enhanced Telegram `/balance` report with ROI, Realized/Unrealized details.
+
 ### Live Deployment & Stabilization (GCP)
 - **Environment Transition**: Transitioned from Paper Trading to **Testnet Real Trading**.
 - **Wallet Integration**: Configured `HL_WALLET_ADDRESS` and `HL_AGENT_PRIVATE_KEY` for live execution.
@@ -124,28 +139,14 @@
     - Fixed `KeyError: 'szDecimals'` crash on spot orders. The Spot universe stores `szDecimals` inside `tokens[]` (indexed by `token.index`), not directly on the universe asset object as in Perp.
     - Implemented correct two-step lookup: `universe[i].tokens[0]` → match in `tokens[]` by `index` → read `szDecimals`.
 
-*Status: 🟢 24/7 Live Monitoring Active on GCP. Testnet naked-short positions manually cleared. Codebase hardened against all known failure modes.*
-
-### Mainnet Optimization & Final Stabilization
-- **Precise Spot Mapping (Mainnet)**:
-    - **Discovery**: Major assets like BTC, ETH, and SOL use internal aliases (`@142`, `@151`, `@156`) and "Unit" token names (`UBTC`, `UETH`, `USOL`) in the Hyperliquid Mainnet Spot API. Standard fuzzy matching failed to identify these, causing the bot to skip valid entry opportunities.
-    - **Fix**: Replaced price-based fuzzy matching with **precise name and fullName matching**. The bot now correctly maps Perp symbols to their corresponding Spot universe names by checking token metadata (e.g., `U+Symbol` or `fullName` containing "Bitcoin"/"Ethereum").
-- **Order Execution Hardening ($10 Limit)**:
-    - **Challenge**: Hyperliquid enforces a minimum order value of **$10 USDC**. With a small initial balance (e.g., $50), the default `max_positions=5` resulted in ~$9.5 per order, causing exchange rejections.
-    - **Fix (Dynamic Slots)**: Implemented **Dynamic Max Positions** logic. The bot now automatically calculates the optimal number of slots based on available balance (ensuring each order is at least $11) and clamps it to the user-defined maximum.
-- **Zero-Size Guard**:
-    - Added pre-order validation to catch cases where calculated sizes round down to `0` due to `szDecimals` constraints, preventing "Zero size" exchange errors.
-- **Success**: Verified that the bot now correctly identifies `ETH` and `SOL` spot markets and attempts entry with properly sized orders above the $10 threshold.
-
-*Status: 🟢 24/7 Live Monitoring Active on GCP. Mainnet Spot mapping and $10 limit issues resolved. 봇은 이제 BTC/ETH 등 주요 자산의 메인넷 현물 시장을 완벽하게 인식하며, 잔고에 맞춰 주문 크기를 자동으로 조절합니다.* 🚀
-
-### Spot Market Coverage & Error Log Cleanup
-- **Robust Spot Mapping Strategy**:
-    - **Optimization**: Updated `HyperliquidAPI.get_all_spot_data()` to utilize `spot_mapping.json` for precise ID-based mapping (`@249` for BTC, `@250` for ETH, etc.).
-    - **Fallback Logic**: Implemented multi-tier matching (Mapping File → Precise Name/FullName → Price Fuzzy Matching) to maximize coverage across different assets.
-- **Target Scan Filtering**:
-    - **Logic Change**: Modified `DeltaNeutralStrategy.get_targets()` to **exclude** any perpetual asset that does not have a corresponding spot market in the current environment.
-    - **Result**: Completely eliminated `[PRE-CHECK FAIL]` error logs for assets like DYDX, ARB, and LTC that lack spot pairs on Hyperliquid Mainnet.
-    - **Reliability**: The bot now only evaluates and logs legitimate arbitrage opportunities, significantly reducing log noise and improving monitoring clarity.
+- **Mainnet Optimization & Final Stabilization**:
+    - **Precise Spot Mapping (Mainnet)**:
+        - Replaced price-based fuzzy matching with **precise name and fullName matching**. Correctly handles aliases like `@142` (UBTC), `@151` (UETH), etc.
+    - **Order Execution Hardening ($10 Limit)**:
+        - Implemented **Dynamic Max Positions** logic to ensure every order is at least $11, avoiding exchange rejections.
+    - **Zero-Size Guard**: Added pre-order validation to catch rounding issues.
 
 *Status: 🟢 🟢 Mainnet Ready. Spot mapping logic is now robust across all major assets, and log noise has been minimized by intelligent filtering. 봇은 이제 현물 마켓이 있는 종목만 정밀하게 타겟팅하여 안정적으로 운용됩니다.* 🚀
+
+---
+*Next Step: Verify Testnet order execution and monitor slippage in live environment.*
