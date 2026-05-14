@@ -26,9 +26,8 @@ class TelegramNotifier:
         commands = [
             {"command": "server", "description": "서버 하드웨어 상태 확인"},
             {"command": "status", "description": "봇 가동 상태 요약"},
-            {"command": "balance", "description": "가상 수익률 확인"},
-            {"command": "positions", "description": "보유 포지션 상세"},
-            {"command": "logs", "description": "서버 최근 로그 확인"},
+            {"command": "bot_start", "description": "전략 가동 시작"},
+            {"command": "bot_stop", "description": "전략 가동 중지 (긴급)"},
             {"command": "help", "description": "도움말"}
         ]
         try:
@@ -158,10 +157,22 @@ class TelegramNotifier:
                     await self.send_message("전략 연결 안됨")
             elif cmd == "/logs":
                 await self.send_message(await self.get_latest_logs())
+            elif cmd == "/bot_start":
+                if self.strategy:
+                    self.strategy.toggle_bot(True)
+                    await self.send_message("▶️ *[HLQuant]* 전략 가동을 시작합니다.")
+                else:
+                    await self.send_message("⚠️ 전략 객체가 연결되지 않았습니다.")
+            elif cmd == "/bot_stop":
+                if self.strategy:
+                    self.strategy.toggle_bot(False)
+                    await self.send_message("⏸ *[HLQuant]* 전략 가동을 중지했습니다. (새로운 진입/청산을 하지 않음)")
+                else:
+                    await self.send_message("⚠️ 전략 객체가 연결되지 않았습니다.")
             elif cmd == "/help":
-                await self.send_message("명령어: /server, /status, /positions, /balance, /logs, /help")
+                await self.send_message("명령어:\n/status - 현재 상태\n/balance - 수익률\n/positions - 포지션\n/logs - 로그\n/bot_start - 가동 시작\n/bot_stop - 가동 중지\n/server - 서버 상태")
             elif cmd == "/start":
-                await self.send_message("HLQuant 봇 시작! /help를 입력하세요.")
+                await self.send_message("HLQuant 봇에 오신 것을 환영합니다! /help를 입력하여 명령어를 확인하세요.")
         except Exception as e:
             logging.error(f"Command execution error ({cmd}): {e}")
             await self.send_message(f"⚠️ 명령어 처리 중 오류 발생: {e}")

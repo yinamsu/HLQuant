@@ -28,8 +28,30 @@ class DeltaNeutralStrategy:
         self.entry_apy_threshold = 10.0 # 연환산 APY 10% 이상 시 진입
         self.exit_apy_threshold = 3.0  # APY 3% 미만 시 청산 검토
         self.rebalance_gap = 10.0      # 타 종목 APY가 10% 이상 높을 때 리밸런싱
+        
+        # 봇 가동 상태 제어
+        self.config_file = "bot_config.json"
+        self.is_active = self._load_config()
 
-    def _load_state(self):
+    def _load_config(self):
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, "r") as f:
+                    return json.load(f).get("is_active", True)
+            except: return True
+        return True
+
+    def _save_config(self):
+        try:
+            with open(self.config_file, "w") as f:
+                json.dump({"is_active": self.is_active}, f)
+        except Exception as e:
+            logging.error(f"Config Save Error: {e}")
+
+    def toggle_bot(self, active: bool):
+        self.is_active = active
+        self._save_config()
+        logging.info(f"Bot Active Status Changed: {active}")
         if os.path.exists(self.state_file):
             try:
                 with open(self.state_file, "r") as f:
@@ -94,6 +116,9 @@ class DeltaNeutralStrategy:
 
     async def execute_logic(self, perp_data, spot_data):
         """메인 전략 루프: 청산 및 진입 로직 수행"""
+        if not self.is_active:
+            return # 봇이 정지 상태면 로직 스킵
+
         current_time = datetime.now()
         
         # 0. 동적 max_positions 설정 (잔고 $50 기준 $10씩 5개)
@@ -150,52 +175,50 @@ class DeltaNeutralStrategy:
                     virtual_spot_buy_px = t['spot_px'] * (1 + self.slippage_rate)
                     virtual_perp_sell_px = t['perp_px'] * (1 - self.slippage_rate)
                     
-                    # --- 실전 진입 로직 (Testnet/Mainnet) ---
+                    # --- 실전 진입 로직 (Safety First: Spot -> Perp) ---
                     if self.is_real_trading and self.api:
                         try:
-                            # [사전 검증 1] 현물 심볼 존재 여부 확인
+                            # 1. 사전 검증
                             spot_name = spot_data.get(t['symbol'], {}).get('spot_name')
                             if not spot_name:
-                                logging.error(f"[PRE-CHECK FAIL] No spot market for {t['symbol']} — skipping")
+                                logging.error(f"[PRE-CHECK] No spot mapping for {t['symbol']}")
                                 continue
                             
-                            # [사전 검증 2] 실제 잔고 조회
                             actual_balance = await self.api.get_balance()
                             if actual_balance < 10:
-                                logging.error(f"Insufficient balance (${actual_balance:.2f}) for entry.")
+                                logging.error(f"Insufficient balance (${actual_balance:.2f})")
                                 continue
                             
-                            # 가용 자산의 95%만 사용하여 여유분 확보
                             usable_balance = actual_balance * 0.95
                             size_usd = min(usable_balance / (self.max_positions - len(self.positions)), usable_balance)
-                            
-                            # $10 미만 주문 방지
                             if size_usd < 10.5:
                                 if actual_balance >= 10.5: size_usd = 10.5
                                 else: continue
                                 
                             perp_amount = size_usd / t['perp_px']
-                            
-                            # 1. 선물 숏 진입 (Sell)
                             perp_sz_dec = t.get('perp_sz_dec', 0)
                             spot_sz_dec = t.get('spot_sz_dec', 0)
 
-                            logging.info(f"Placing Sell order for {t['symbol']}: {perp_amount} @ {virtual_perp_sell_px} (szDec: {perp_sz_dec})")
-                            r1 = await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False, is_perp=True, sz_decimals=perp_sz_dec)
+                            # STEP 1: 현물(Spot) 먼저 매수
+                            logging.info(f"STEP 1: Buying Spot {spot_name} | {perp_amount} @ {virtual_spot_buy_px}")
+                            r_spot = await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px, True, is_perp=False, sz_decimals=spot_sz_dec)
                             
-                            # 2. 현물 롱 진입 (Buy)
-                            logging.info(f"Placing Buy order for {spot_name}: {perp_amount} @ {virtual_spot_buy_px} (szDec: {spot_sz_dec})")
-                            r2 = await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px, True, is_perp=False, sz_decimals=spot_sz_dec)
+                            if not r_spot:
+                                logging.error(f"STEP 1 FAILED: Spot buy failed for {t['symbol']}. Aborting entry.")
+                                continue
+
+                            # STEP 2: 현물 체결 확인 후 선물(Perp) 숏 진입
+                            logging.info(f"STEP 2: Selling Perp {t['symbol']} | {perp_amount} @ {virtual_perp_sell_px}")
+                            r_perp = await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px, False, is_perp=True, sz_decimals=perp_sz_dec)
                             
-                            if not r1 or not r2:
-                                logging.error(f"Real entry failed for {t['symbol']}. Rolling back.")
-                                # 롤백: 한쪽만 체결된 경우 반대 매매
-                                if r1: await self.api.place_order(t['symbol'], perp_amount, virtual_perp_sell_px * 1.1, True, is_perp=True)
-                                if r2: await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px * 0.9, False, is_perp=False)
-                                await self.notifier.send_message(f"⚠️ *[ENTRY FAILED]*\n• {t['symbol']} 진입 실패 (롤백 수행)")
+                            if not r_perp:
+                                logging.error(f"STEP 2 FAILED: Perp sell failed for {t['symbol']}. Rolling back Spot.")
+                                # 현물 롤백 (매도)
+                                await self.api.place_order(spot_name, perp_amount, virtual_spot_buy_px * 0.9, False, is_perp=False, sz_decimals=spot_sz_dec)
+                                await self.notifier.send_message(f"⚠️ *[ENTRY FAILED]*\n• {t['symbol']} 선물 진입 실패 (현물 롤백 완료)")
                                 continue
                                 
-                            logging.info(f"[REAL ENTRY] {t['symbol']} successful with size ${size_usd:.2f}")
+                            logging.info(f"[REAL ENTRY] {t['symbol']} successful!")
                         except Exception as e:
                             logging.error(f"Real entry error for {t['symbol']}: {e}")
                             continue
