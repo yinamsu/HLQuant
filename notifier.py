@@ -24,10 +24,13 @@ class TelegramNotifier:
     async def set_commands(self):
         if not self.token: return
         commands = [
-            {"command": "server", "description": "서버 하드웨어 상태 확인"},
             {"command": "status", "description": "봇 가동 상태 요약"},
+            {"command": "balance", "description": "수익률 및 잔고 확인"},
+            {"command": "positions", "description": "상세 포지션 현황"},
+            {"command": "logs", "description": "최근 서버 로그 확인"},
             {"command": "bot_start", "description": "전략 가동 시작"},
             {"command": "bot_stop", "description": "전략 가동 중지 (긴급)"},
+            {"command": "server", "description": "서버 하드웨어 상태"},
             {"command": "help", "description": "도움말"}
         ]
         try:
