@@ -11,7 +11,7 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.handlers.RotatingFileHandler("bot.log", maxBytes=10*1024*1024, backupCount=5)
+        logging.handlers.RotatingFileHandler("bot.log", maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
     ]
 )
 
