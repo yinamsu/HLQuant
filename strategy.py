@@ -52,6 +52,8 @@ class DeltaNeutralStrategy:
         self.is_active = active
         self._save_config()
         logging.info(f"Bot Active Status Changed: {active}")
+
+    def _load_state(self):
         if os.path.exists(self.state_file):
             try:
                 with open(self.state_file, "r") as f:
