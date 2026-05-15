@@ -5,7 +5,7 @@ param (
     [switch]$Download
 )
 
-$TMP_KEY_PATH = "deploy_key.pem"
+$TMP_KEY_PATH = "deploy_key_fixed"
 $REMOTE_USER = "yinamsu"
 $REMOTE_HOST = "136.114.144.64"
 $REMOTE_LOG_PATH = "~/HLQuant/bot.log"

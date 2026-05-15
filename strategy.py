@@ -153,13 +153,43 @@ class DeltaNeutralStrategy:
                     
         # 실제 청산 실행
         for symbol in to_exit:
-            if self.is_real_trading:
-                # [실전] 청산 로직 (선물 Buy + 현물 Sell)
-                # ... (구현 생략 - 필요시 추가)
-                pass
+            if self.is_real_trading and self.api:
+                try:
+                    # 1. 수량 확인 (거래소에서 직접 조회)
+                    user_state = await self.api.get_user_state()
+                    amount = 0
+                    for p in user_state.get('assetPositions', []):
+                        if p['position']['coin'] == symbol:
+                            amount = abs(float(p['position']['szi']))
+                            break
+                    
+                    if amount > 0:
+                        # 2. 가격 데이터 가져오기
+                        p_data = perp_data.get(symbol, {})
+                        s_data = spot_data.get(symbol, {})
+                        
+                        # STEP 1: 선물(Perp) 먼저 매수 (숏 청산) - 펀딩비 차단
+                        logging.info(f"EXIT STEP 1: Buying Perp {symbol} | {amount}")
+                        # 공격적인 가격으로 IoC 주문 (시장가 효과)
+                        await self.api.place_order(symbol, amount, p_data['midPrice'] * 1.02, True, is_perp=True, sz_decimals=p_data.get('szDecimals', 0))
+                        
+                        # STEP 2: 현물(Spot) 매도
+                        spot_name = s_data.get('spot_name')
+                        if spot_name:
+                            logging.info(f"EXIT STEP 2: Selling Spot {spot_name} | {amount}")
+                            await self.api.place_order(spot_name, amount, s_data['midPrice'] * 0.98, False, is_perp=False, sz_decimals=s_data.get('szDecimals', 0))
+                        
+                        await self.notifier.send_message(f"✅ *[REAL EXIT COMPLETED]*\n• {symbol} 청산 완료 (수량: {amount})")
+                    else:
+                        logging.warning(f"Exit triggered but no position found on exchange for {symbol}")
+                except Exception as e:
+                    logging.error(f"Real exit error for {symbol}: {e}")
+                    continue
             
             self.total_realized_profit += self.positions[symbol].get('profit', 0.0)
-            await self.notifier.send_exit_notification(symbol, "Low APY / Target Reached")
+            if not self.is_real_trading:
+                await self.notifier.send_exit_notification(symbol, "Low APY / Target Reached")
+            
             del self.positions[symbol]
         
         if to_exit: self._save_state()
@@ -232,6 +262,7 @@ class DeltaNeutralStrategy:
                         'spot_px': virtual_spot_buy_px,
                         'perp_px': virtual_perp_sell_px,
                         'entry_apy': t['apy'],
+                        'size': perp_amount if self.is_real_trading else 0,
                         'profit': 0.0
                     }
                     logging.info(f"[ENTRY] {t['symbol']} | APY: {t['apy']:.2f}%")
