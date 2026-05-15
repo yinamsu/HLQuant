@@ -355,14 +355,15 @@ class DeltaNeutralStrategy:
                 
                 for b in spot_state.get('balances', []):
                     total = float(b.get('total', 0.0))
+                    coin = b.get('coin')
                     if total > 0:
-                        coin = b.get('coin')
                         if coin == 'USDC':
                             spot_value += total
                         else:
-                            # 코인 가치 계산 (현재가 필요)
-                            # 간단하게 하기 위해 현재 스캔된 spot_data가 있다면 연동 가능
-                            spot_assets.append(f"    - {coin}: {total:.4f}")
+                            # 0.1달러 미만의 먼지 잔고는 표시하지 않음 (대략적인 수량 기준)
+                            # 대부분의 코인에서 0.01개 미만이거나 가치가 매우 낮은 경우 필터링
+                            if total > 0.01: 
+                                spot_assets.append(f"    - {coin}: {total:.4f}")
                 
                 total_portfolio = perp_value + spot_value
                 
