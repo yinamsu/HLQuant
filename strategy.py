@@ -338,28 +338,55 @@ class DeltaNeutralStrategy:
         )
 
     async def get_balance_summary(self):
-        """잔고 및 수익률 요약 반환"""
+        """잔고 및 수익률 상세 요약 반환 (UI 스타일)"""
         if self.is_real_trading and self.api:
             try:
+                # 1. 선물(Perp) 상태 가져오기
                 user_state = await self.api.get_user_state()
-                perp_value = float(user_state.get('marginSummary', {}).get('accountValue', 0.0))
+                margin = user_state.get('marginSummary', {})
+                perp_value = float(margin.get('accountValue', 0.0))
+                unrealized_pnl = float(margin.get('totalUnrealizedPnl', 0.0))
+                margin_used = float(margin.get('totalMarginUsed', 0.0))
                 
-                spot_value = 0.0
+                # 2. 현물(Spot) 상태 가져오기
                 spot_state = self.api.info.spot_user_state(self.api.wallet_address)
+                spot_value = 0.0
+                spot_assets = []
+                
                 for b in spot_state.get('balances', []):
-                    if b.get('coin') == 'USDC':
-                        spot_value = float(b.get('total', 0.0))
-                        break
-                        
-                account_value = perp_value + spot_value
-                return (
-                    f"💰 *[HLQuant Live Portfolio]*\n\n"
-                    f"• *Total Value*: ${account_value:,.2f}\n"
-                    f"  - Spot USDC: ${spot_value:,.2f}\n"
-                    f"  - Perp Equity: ${perp_value:,.2f}\n\n"
-                    f"🟢 Live API Connected"
+                    total = float(b.get('total', 0.0))
+                    if total > 0:
+                        coin = b.get('coin')
+                        if coin == 'USDC':
+                            spot_value += total
+                        else:
+                            # 코인 가치 계산 (현재가 필요)
+                            # 간단하게 하기 위해 현재 스캔된 spot_data가 있다면 연동 가능
+                            spot_assets.append(f"    - {coin}: {total:.4f}")
+                
+                total_portfolio = perp_value + spot_value
+                
+                # 3. 메시지 구성
+                status_icon = "🟢" if unrealized_pnl >= 0 else "🔴"
+                msg = (
+                    f"💰 *[HLQuant Unified Portfolio]*\n\n"
+                    f"• *Total Value*: ${total_portfolio:,.2f}\n"
+                    f"• *Unrealized PNL*: {status_icon} ${unrealized_pnl:,.2f}\n\n"
+                    f"📊 *Perpetual (Futures)*\n"
+                    f"  - Equity: ${perp_value:,.2f}\n"
+                    f"  - Margin Used: ${margin_used:,.2f}\n\n"
+                    f"💎 *Spot (Holdings)*\n"
+                    f"  - Cash: ${spot_value:,.2f} USDC\n"
                 )
-            except: pass
+                if spot_assets:
+                    msg += "\n".join(spot_assets) + "\n"
+                
+                msg += f"\n✨ *Account Status*: Live Connected"
+                return msg
+            except Exception as e:
+                logging.error(f"Balance Summary Error: {e}")
+                return "⚠️ 잔고 데이터를 가져오는 중 오류가 발생했습니다."
+        
         return "💰 *Paper Balance Mode*"
 
     def get_positions_summary(self):
