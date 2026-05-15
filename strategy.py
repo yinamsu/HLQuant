@@ -141,15 +141,27 @@ class DeltaNeutralStrategy:
                 funding_profit = (p_data['funding'] / 60) * 100 # 단순화된 계산
                 pos_info['profit'] = pos_info.get('profit', 0.0) + funding_profit
             
+            # 펀딩비 수익률(APY) 계산
+            apy = (p_data['funding'] * 24 * 365 * 100) if p_data else 0
+            
             # 청산 조건 확인
             entry_time = datetime.fromisoformat(pos_info['entry_time'])
             hold_time = current_time - entry_time
             
-            # 조건 A: 최소 보유 시간 경과 + APY 하락
-            if hold_time > timedelta(hours=self.min_hold_hours):
-                if p_data and (p_data['funding'] * 24 * 365 * 100) < self.exit_apy_threshold:
-                    logging.info(f"Exit Condition: Low APY for {symbol}")
-                    to_exit.append(symbol)
+            should_exit = False
+            if p_data:
+                # 조건 A: 최소 보유 시간 경과 + APY 하락 (기존 전략)
+                if hold_time > timedelta(hours=self.min_hold_hours) and apy < self.exit_apy_threshold:
+                    logging.info(f"Exit Condition (Target): Low APY for {symbol} ({apy:.2f}%)")
+                    should_exit = True
+                
+                # 조건 B: APY가 마이너스인 경우 (긴급 탈출)
+                elif apy < 0:
+                    logging.info(f"Exit Condition (Emergency): Negative APY for {symbol} ({apy:.2f}%)")
+                    should_exit = True
+            
+            if should_exit:
+                to_exit.append(symbol)
                     
         # 실제 청산 실행
         for symbol in to_exit:
