@@ -23,10 +23,10 @@ class DeltaNeutralStrategy:
         self.notifier = notifier or TelegramNotifier()
         
         # 전략 파라미터
-        self.min_hold_hours = 8        # 최소 8시간 보유 (펀딩비 수취 목적)
+        self.min_hold_hours = 4        # 최소 4시간 보유 (로테이션 효율화)
         self.slippage_rate = 0.005     # 0.5% 슬리피지 가드
-        self.entry_apy_threshold = 10.0 # 연환산 APY 10% 이상 시 진입
-        self.exit_apy_threshold = 3.0  # APY 3% 미만 시 청산 검토
+        self.entry_apy_threshold = 7.5 # 연환산 APY 7.5% 이상 시 진입
+        self.exit_apy_threshold = 2.0  # APY 2% 미만 시 청산 검토
         self.rebalance_gap = 10.0      # 타 종목 APY가 10% 이상 높을 때 리밸런싱
         
         # 봇 가동 상태 제어
