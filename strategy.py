@@ -295,8 +295,8 @@ class DeltaNeutralStrategy:
             # 베이시스 프리미엄 계산 (선물/현물 가격차)
             premium = (p_data['midPrice'] - s_data['midPrice']) / s_data['midPrice'] * 100
             
-            # 진입 조건: APY 10% 이상 & 프리미엄이 너무 과하지 않음
-            if apy >= self.entry_apy_threshold and premium >= -0.1:
+            # 진입 조건: APY 7.5% 이상 & 프리미엄이 -0.05% 이상 (백워데이션 방어 강화)
+            if apy >= self.entry_apy_threshold and premium >= -0.05:
                 # [추가] 수량 정밀도 체크 - 현재 잔고로 최소 1개는 살 수 있는지 확인
                 if self.is_real_trading:
                     actual_balance = 50.0 # 기본값 (나중에 실제 fetch)
@@ -306,6 +306,7 @@ class DeltaNeutralStrategy:
                     if round(perp_amount, p_data['szDecimals']) <= 0:
                         continue # 너무 소액이라 주문 불가
 
+                logging.info(f"Target found: {symbol} | APY: {apy:.2f}% | Premium: {premium:.4f}")
                 candidates.append({
                     'symbol': symbol,
                     'apy': apy,
